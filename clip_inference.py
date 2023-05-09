@@ -36,7 +36,7 @@ def main(args):
     else:
         raise NotImplementedError
 
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=256, num_workers=4, drop_last=False)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1024, num_workers=4, drop_last=False)
     temperature = 0.02  # redundant parameter
     
     if args.embeddings:
@@ -68,6 +68,7 @@ def main(args):
         # save the dictionary to a numpy file
         file_path = os.path.join(emb_dir, 'text_embedding.npy')
         np.save(file_path, text_dict)
+        print(text_dict)
         print("save")
 
     if args.predictions:
@@ -108,8 +109,6 @@ def main(args):
                     if args.predictions:
                         prediction_dict[os.path.split(index)[-1]] = str(prediction.clone().detach().cpu().numpy())
                 # prediction이랑 image embedding file path 만들어주기
-            print(image_dict)
-            print(prediction_dict)
     
     if args.embeddings:
         # save the dictionary to a numpy file[]
@@ -119,10 +118,11 @@ def main(args):
         # save the dictionary to a numpy file
         file_path = os.path.join(emb_dir, 'image_embedding.npy')
         np.save(file_path, image_dict)
+        print(image_dict)
         print("save img")
 
     if args.predictions:
-        pred_dir = os.path.join(args.data_dir, args.prediction_dir, args.dataset)
+        pred_dir = os.path.join(args.data_dir, args.prediction_dir, args.dataset,args.backbone)
         if not os.path.exists(pred_dir):
             os.makedirs(pred_dir, exist_ok=True)
         file_path = os.path.join(pred_dir, 'prediction.csv')
@@ -139,6 +139,7 @@ def main(args):
         # save the dictionary to a numpy file
         print(prediction_dict)
         print("save pred")
+
     preds_minor, preds, targets_minor = torch.cat(preds_minor), torch.cat(preds), torch.cat(targets_minor)
 
     print(classification_report(targets_minor, preds_minor))
