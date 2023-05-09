@@ -1,0 +1,1 @@
+python clip_inference.py --data_dir data --dataset waterbirds --embedding_dir embeddings --embeddings --predictions --save_path minor_pred/waterbirds.pt
