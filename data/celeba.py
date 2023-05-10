@@ -54,8 +54,9 @@ class CelebA(Dataset):
         y = self.targets[idx]
         y_group = self.targets_group[idx]
         y_spurious = self.targets_spurious[idx]
+        y_split = self.split_array[idx]
 
-        return x, (y, y_group, y_spurious), img_filename # img, (target class(hair), groups(4), Spurious Bias(gender)), idx
+        return x, (y, y_group, y_spurious, y_split), img_filename  # img, (target class(hair), groups(4), Spurious Bias(gender) Split), idx
 
 def get_transform_celeba():
     transform = transforms.Compose([

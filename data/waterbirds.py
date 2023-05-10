@@ -59,12 +59,13 @@ class Waterbirds(Dataset):
         y = self.targets[idx]
         y_group = self.targets_group[idx]
         y_spurious = self.targets_spurious[idx]
+        y_split = self.split_array[idx]
 
         # if self.zs_group_label:
         #     y_group_zs = self.preds_group_zeroshot[idx]
         #     return x, (y, y_group, y_spurious, y_group_zs), idx
 
-        return x, (y, y_group, y_spurious), img_filename # img, (target class(species), groups(4), Spurious Bias(place)), idx
+        return x, (y, y_group, y_spurious, y_split), img_filename # img, (target class(species), groups(4), Spurious Bias(place)), idx
 
 
 def get_transform_cub(train):
