@@ -12,8 +12,6 @@ NOTE 수정사항 // waterbirds.py -> waterbirds_js.py (새벽이라 따로 물�
 
 """
 
-
-
 import os
 import pandas as pd
 import numpy as np
@@ -29,7 +27,7 @@ class Waterbirds(Dataset):
         self.split = split
         self.split_dict = {'train': 0, 'val': 1, 'test': 2}
 
-        self.metadata_df = pd.read_csv(os.path.join(self.data_dir, 'metadata.csv'))
+        self.metadata_df = pd.read_csv(os.path.join(self.data_dir, 'metadata.csv')) 
         # self.image_dir = image_dir # NOTE: deleted
         self.metadata_df = self.metadata_df[self.metadata_df['split'] == self.split_dict[self.split]]
 
