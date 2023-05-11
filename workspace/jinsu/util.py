@@ -45,6 +45,18 @@ def accuracy(output, target, batch_size):
         acc = correct_count / batch_size
         return acc
 
+#NOTE For zero-shot evaluation    
+def accuracy_zs(pred, target, batch_size):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        batch_size = target.size(0)
+        # pred = output.argmax(dim=1)
+        correct = pred.eq(target)
+
+        correct_count = torch.sum(correct).item()
+        acc = correct_count / batch_size
+        return acc
+
 
 def adjust_learning_rate(args, optimizer, epoch):
     lr = args.learning_rate

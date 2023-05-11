@@ -1,3 +1,5 @@
+# 감사링(from 진수)
+
 ### 대부분의 Code는 https://github.com/kohpangwei/group_DRO를 참고하는듯?
 ### CelebA Dataset source: https://www.kaggle.com/datasets/jessicali9530/celeba-dataset (Kaggle)
 
