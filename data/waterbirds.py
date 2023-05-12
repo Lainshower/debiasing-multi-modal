@@ -2,7 +2,16 @@
 Waterbirds Dataset
 - Reference code: https://github.com/kohpangwei/group_DRO/blob/master/data/cub_dataset.py
 - See Group DRO, https://arxiv.org/abs/1911.08731 for more details
+
+
+
+NOTE 수정사항 // waterbirds.py -> waterbirds_js.py (새벽이라 따로 물어보지 않고 잠시 고쳐서 사용함)
+- Del: image_dir = 'combined' 
+- Del: self.image_dir = image_dir
+- Modify: data_dir = ['./data/waterbirds'] -> ['./data/waterbirds/waterbird_complete95_forest2water2'] (Official)
+
 """
+
 import os
 import pandas as pd
 import numpy as np
@@ -13,13 +22,13 @@ from PIL import Image
 
 class Waterbirds(Dataset):
 
-    def __init__(self, data_dir='./data/waterbirds', image_dir='combined', split='train', transform=None, zs_group_label=None):
+    def __init__(self, data_dir='./data/waterbirds/waterbird_complete95_forest2water2', split='train', transform=None): # NOTE: modified
         self.data_dir = data_dir
         self.split = split
         self.split_dict = {'train': 0, 'val': 1, 'test': 2}
 
-        self.metadata_df = pd.read_csv(os.path.join(self.data_dir, 'metadata.csv'))
-        self.image_dir = image_dir
+        self.metadata_df = pd.read_csv(os.path.join(self.data_dir, 'metadata.csv')) 
+        
         self.metadata_df = self.metadata_df[self.metadata_df['split'] == self.split_dict[self.split]]
 
         # Get the y values
@@ -30,7 +39,7 @@ class Waterbirds(Dataset):
         # Extract filenames and splits
         self.filename_array = self.metadata_df['img_filename'].values
         self.split_array = self.metadata_df['split'].values
-
+    
         self.targets = torch.tensor(self.y_array)
         self.targets_group = torch.tensor(self.group_array)
         self.targets_spurious = torch.tensor(self.confounder_array)
@@ -39,20 +48,18 @@ class Waterbirds(Dataset):
 
         self.n_classes = 2
         self.n_groups = 4
-
-        # Attribute for noisy label detection
-        self.noise_or_not = np.abs(self.y_array - self.confounder_array)  # 1 if minor (noisy)
-
-        self.zs_group_label = zs_group_label
-        if zs_group_label:
-            self.preds_group_zeroshot = torch.tensor(np.load(zs_group_label))
-            self.noise_or_not = (self.targets_group != self.preds_group_zeroshot).long().numpy()  # 1 if noisy
-
+        self.n_places = 2
+        
+        # NOTE for calcultating weighted test mean acc. (using training distribution.)
+        self.group_counts = (torch.arange(self.n_groups).unsqueeze(1) == torch.from_numpy(self.group_array)).sum(1).float()
+        self.group_ratio = self.group_counts / len(self)
+        
     def __len__(self):
         return len(self.filename_array)
 
     def __getitem__(self, idx):
-        img_filename = os.path.join(self.data_dir, self.image_dir, self.filename_array[idx])
+        # img_filename = os.path.join(self.data_dir, self.image_dir, self.filename_array[idx]) # NOTE: modified
+        img_filename = os.path.join(self.data_dir,  self.filename_array[idx])
         img = Image.open(img_filename).convert('RGB')
         x = self.transform(img)
 

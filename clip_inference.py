@@ -34,8 +34,8 @@ def main(args):
     else:
         raise NotImplementedError
     
-    if args.text_embeddings:
-        text_dict = {}
+    if args.save:
+        text_dict, image_dict = {}, {}
     
     with torch.no_grad():
         zeroshot_weights = []
@@ -48,13 +48,13 @@ def main(args):
             class_embedding = class_embeddings.mean(dim=0)
             class_embedding /= class_embedding.norm()
             
-            if args.text_embeddings:
+            if args.save:
                 text_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
             
             zeroshot_weights.append(class_embedding)
         zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
 
-    if args.text_embeddings:
+    if args.save:
         # save the dictionary to a json file
         emb_dir = os.path.join(args.data_dir, args.embedding_dir, args.dataset)
         if not os.path.exists(emb_dir):
@@ -65,15 +65,12 @@ def main(args):
         with open(file_path, 'w') as f:
             json.dump(text_dict, f)
             print("save text emb")
-        print(text_dict)
+        # print(text_dict)
         del text_dict
-
-    if args.image_embeddings:
-        image_dict = {}
 
     if args.split != 'all':
         if args.dataset == 'waterbirds':
-            data_dir = os.path.join(args.data_dir, 'waterbirds')
+            data_dir = os.path.join(args.data_dir, 'waterbirds', 'waterbird_complete95_forest2water2') # NOTE: 수정
             dataset = Waterbirds(data_dir=data_dir, split=args.split, transform=transform)
         elif args.dataset == 'celeba':
             data_dir = os.path.join(args.data_dir, 'celeba')
@@ -81,16 +78,20 @@ def main(args):
         else:
             raise NotImplementedError
     
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=512, num_workers=4, drop_last=False)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1024, num_workers=4, drop_last=False)
         temperature = 0.02  # redundant parameter
     
         preds_minor, preds, targets_minor = [], [], []
         with torch.no_grad():
             for (image, (target, target_g, target_s, target_split), file_name) in tqdm(dataloader):
-
                 image = image.cuda()
                 image_features = model.encode_image(image)
-                image_features /= image_features.norm(dim=-1, keepdim=True)
+                if not args.normalized:
+                    image_features_for_logit = image_features.clone()
+                    image_features_for_logit /= image_features_for_logit.norm(dim=-1, keepdim=True)
+                    logits = image_features_for_logit @ zeroshot_weights / temperature
+                else:
+                    image_features /= image_features.norm(dim=-1, keepdim=True)
                 
                 logits = image_features @ zeroshot_weights / temperature
 
@@ -114,7 +115,7 @@ def main(args):
                 preds.append(pred)
                 targets_minor.append(is_minor)
 
-                if args.image_embeddings or args.predictions:               
+                if args.save:               
                     for index, y, group, cofounder, split, img_emb, pred in zip(file_name, target, target_g, target_s, target_split, image_features, pred):
                         if args.dataset == 'waterbirds':
                             idx = "/".join(index.split("/")[-2:])
@@ -145,7 +146,7 @@ def main(args):
     else:
         for split in ['train', 'val', 'test']:
             if args.dataset == 'waterbirds':
-                data_dir = os.path.join(args.data_dir, 'waterbirds')
+                data_dir = os.path.join(args.data_dir, 'waterbirds', 'waterbird_complete95_forest2water2') # NOTE: 수정
                 dataset = Waterbirds(data_dir=data_dir, split=split, transform=transform)
             elif args.dataset == 'celeba':
                 data_dir = os.path.join(args.data_dir, 'celeba')
@@ -162,7 +163,12 @@ def main(args):
 
                     image = image.cuda()
                     image_features = model.encode_image(image)
-                    image_features /= image_features.norm(dim=-1, keepdim=True)
+                    if not args.normalized:
+                        image_features_for_logit = image_features.clone()
+                        image_features_for_logit /= image_features_for_logit.norm(dim=-1, keepdim=True)
+                        logits = image_features_for_logit @ zeroshot_weights / temperature
+                    else:
+                        image_features /= image_features.norm(dim=-1, keepdim=True)
                     
                     logits = image_features @ zeroshot_weights / temperature
 
@@ -186,7 +192,7 @@ def main(args):
                     preds.append(pred)
                     targets_minor.append(is_minor)
 
-                    if args.image_embeddings or args.predictions:               
+                    if args.save:               
                         for index, y, group, cofounder, split, img_emb, pred in zip(file_name, target, target_g, target_s, target_split, image_features, pred):
                             if args.dataset == 'waterbirds':
                                 idx = "/".join(index.split("/")[-2:])
@@ -214,8 +220,7 @@ def main(args):
             print(classification_report(targets_minor, preds_minor))
 
 
-    if args.image_embeddings or args.predictions:
-        import json
+    if args.save:
         emb_dir = os.path.join(args.data_dir, args.embedding_dir, args.dataset, args.backbone)
         if not os.path.exists(emb_dir):
             os.makedirs(emb_dir, exist_ok=True)
@@ -233,11 +238,9 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', default='celeba', choices=['celeba', 'waterbirds'])
     parser.add_argument('--split', default='celeba', choices=['train', 'val', 'test', 'all'])
     parser.add_argument('--backbone', default='RN50', choices=['RN50', 'RN101', 'RN50x4', 'ViT-B/32'])
+    parser.add_argument('--normalized', default=False, action='store_true')
     parser.add_argument('--embedding_dir', default='./embeddings')
-    parser.add_argument('--prediction_dir', default='./predictions')
-    parser.add_argument('--text_embeddings', default=True, action='store_true')
-    parser.add_argument('--image_embeddings', default=True, action='store_true')
-    parser.add_argument('--predictions',  default=True, action='store_true')
+    parser.add_argument('--save', default=False, action='store_true')
 
     args = parser.parse_args()
     main(args)

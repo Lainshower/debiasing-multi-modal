@@ -43,6 +43,10 @@ class CelebA(Dataset):
         self.n_classes = 2
         self.n_groups = 4
 
+        # NOTE for calcultating weighted test mean acc. (using training distribution.)
+        self.group_counts = (torch.arange(self.n_groups).unsqueeze(1) == torch.from_numpy(self.group_array)).sum(1).float()
+        self.group_ratio = self.group_counts / len(self)
+
     def __len__(self):
         return len(self.filename_array)
 
