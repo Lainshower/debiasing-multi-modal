@@ -67,7 +67,7 @@ class Waterbirds(Dataset):
 
     def __getitem__(self, idx):
         # img_filename = os.path.join(self.data_dir, self.image_dir, self.filename_array[idx]) # NOTE: modified
-        img_filename = os.path.join(self.data_dir,  self.filename_array[idx])
+        img_filename = os.path.join(self.data_dir,  self.filename_array[idx]) # NOTE 수정
         img = Image.open(img_filename).convert('RGB')
         x = self.transform(img)
 
