@@ -78,7 +78,7 @@ class CelebaEmbeddings(Dataset):
         assert ((y==ebd_y) and (y_group==ebd_y_group) and (y_spurious==ebd_y_spurious)), f"inconsistency between {os.path.join(self.data_dir, 'metadata.csv')} and {self.embedding_dir}\n \
             Should be same: y: {y}=={ebd_y} | group: {y_group}=={ebd_y_group} | spurious_attribute: {y_spurious}=={ebd_y_spurious} "
         
-        return ebd, {"y": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename  # img, (target class(hair), groups(4), Spurious Bias(gender) Split), idx
+        return ebd, {"class": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename  # img, (target class(hair), groups(4), Spurious Bias(gender) Split), idx
 
 def get_transform_celeba():
     transform = transforms.Compose([

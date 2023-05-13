@@ -86,7 +86,7 @@ class WaterbirdsEmbeddings(Dataset):
         #     y_group_zs = self.preds_group_zeroshot[idx]
         #     return x, (y, y_group, y_spur gious, y_group_zs), idx
 
-        return ebd, {"y": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename
+        return ebd, {"class": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename
     
 
 
