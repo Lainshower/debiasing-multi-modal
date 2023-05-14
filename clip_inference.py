@@ -92,8 +92,7 @@ def main(args):
                     logits = image_features_for_logit @ zeroshot_weights / temperature
                 else:
                     image_features /= image_features.norm(dim=-1, keepdim=True)
-                
-                logits = image_features @ zeroshot_weights / temperature
+                    logits = image_features @ zeroshot_weights / temperature
 
                 probs = logits.softmax(dim=-1).cpu()
                 conf, pred = torch.max(probs, dim=1)
@@ -169,8 +168,7 @@ def main(args):
                         logits = image_features_for_logit @ zeroshot_weights / temperature
                     else:
                         image_features /= image_features.norm(dim=-1, keepdim=True)
-                    
-                    logits = image_features @ zeroshot_weights / temperature
+                        logits = image_features @ zeroshot_weights / temperature
 
                     probs = logits.softmax(dim=-1).cpu()
                     conf, pred = torch.max(probs, dim=1)
