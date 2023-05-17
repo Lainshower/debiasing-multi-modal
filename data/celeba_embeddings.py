@@ -25,7 +25,6 @@ class CelebaEmbeddings(Dataset):
         self.metadata_df['partition'] = self.split_df['partition'].copy().tolist()
         self.metadata_df = self.metadata_df[self.split_df['partition'] == self.split_dict[self.split]]
 
-
         self.embeddings_df = pd.read_json(self.embedding_dir) # key : image_filename
         indices_to_convert = ['blond', 'male', 'group', 'y_pred'] # str -> index
         self.embeddings_df.loc[indices_to_convert] = self.embeddings_df.loc[indices_to_convert].astype('int64')

@@ -4,3 +4,6 @@
 
 classes = [
      'not blond hair', 'blond hair']
+
+spurious_attributes = [
+    'female','male']

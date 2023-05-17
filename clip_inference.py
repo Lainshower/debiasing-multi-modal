@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-
+import json
 import clip
 
 from sklearn.metrics import classification_report
@@ -19,6 +19,13 @@ import classic_waterbirds_templates
 
 from collections import defaultdict
 
+"""
+0517 수정사항
+- Text embedding : Spurious attributes에 대해서도 저장
+- Embedding file name : image/text 각각 clip.json/[clip_class.json, clip_spurious.json] 으로 변경
+# NOTE : Spurious Attributes에 대한 Class Embedding까지만 저장. (이후 Zero-shot prediction 코드는 따로 수정하지 않음. )
+"""
+
 def main(args):
     model, preprocess = clip.load(args.backbone, device='cuda', jit=False)  # RN50, RN101, RN50x4, ViT-B/32
 
@@ -28,46 +35,71 @@ def main(args):
     if args.dataset == 'waterbirds':
         template = classic_templates.templates
         class_templates = classic_waterbirds_templates.classes
+        spurious_templates = classic_waterbirds_templates.spurious_attributes
+        
     elif args.dataset == 'celeba':
         template = classic_templates.templates
         class_templates = classic_celeba_templates.classes
+        spurious_templates = classic_celeba_templates.spurious_attributes
     else:
         raise NotImplementedError
     
+    
     if args.save:
-        text_dict, image_dict = {}, {}
+        text_class_dict, image_dict = {}, {}
+        text_spurious_dict = {}
     
     with torch.no_grad():
-        zeroshot_weights = []
-        for class_keywords in class_templates:
-            texts = [template[0].format(class_keywords)]
-            texts = clip.tokenize(texts).cuda()
+        zeroshot_weights_dict = {}
+        for idx, templates in enumerate([class_templates, spurious_templates]):
+            zeroshot_weights = []
+            for class_keywords in templates:
+                texts = [template[0].format(class_keywords)]
+                texts = clip.tokenize(texts).cuda()
 
-            class_embeddings = model.encode_text(texts)
-            class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
-            class_embedding = class_embeddings.mean(dim=0)
-            class_embedding /= class_embedding.norm()
+                class_embeddings = model.encode_text(texts)
+                class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
+                class_embedding = class_embeddings.mean(dim=0)
+                class_embedding /= class_embedding.norm()
+                
+                if args.save:
+                    if idx==0:
+                        text_class_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
+                    elif idx==1:
+                        text_spurious_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
+                        
+                zeroshot_weights.append(class_embedding)
+            zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
             
-            if args.save:
-                text_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
+            if idx==0:
+                zeroshot_weights_dict["class"] = zeroshot_weights
+            elif idx==1:
+                zeroshot_weights_dict["spurious"] = zeroshot_weights
             
-            zeroshot_weights.append(class_embedding)
-        zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
-
     if args.save:
         # save the dictionary to a json file
         emb_dir = os.path.join(args.data_dir, args.embedding_dir, args.dataset)
         if not os.path.exists(emb_dir):
             os.makedirs(emb_dir, exist_ok=True)
-        file_path = os.path.join(emb_dir, 'text_embedding.json')
+            
+            
+        file_class_path = os.path.join(emb_dir, 'clip_class.json')
+        file_spurious_path = os.path.join(emb_dir, 'clip_spurious.json')
+    
+        with open(file_class_path, 'w') as f:
+            json.dump(text_class_dict, f)
+            print("save text emb (class)")
         
-        import json
-        with open(file_path, 'w') as f:
-            json.dump(text_dict, f)
-            print("save text emb")
-        # print(text_dict)
-        del text_dict
+        with open(file_spurious_path, 'w') as f:
+            json.dump(text_spurious_dict, f)
+            print("save text emb (spurious)")
+            
+        del text_class_dict, text_spurious_dict
 
+    
+    # NOTE : Zero-shot Prediction은 그냥 Class에 대해서만 수행.
+    zeroshot_weights = zeroshot_weights_dict["class"] 
+    
     if args.split != 'all':
         if args.dataset == 'waterbirds':
             data_dir = os.path.join(args.data_dir, 'waterbirds', 'waterbird_complete95_forest2water2') # NOTE: 수정
@@ -222,7 +254,7 @@ def main(args):
         emb_dir = os.path.join(args.data_dir, args.embedding_dir, args.dataset, args.backbone)
         if not os.path.exists(emb_dir):
             os.makedirs(emb_dir, exist_ok=True)
-        file_path = os.path.join(emb_dir, 'embedding_prediction.json')
+        file_path = os.path.join(emb_dir, 'clip.json')
         with open(file_path, 'w') as f:
             json.dump(image_dict, f)
             print(f"dataset size: {len(image_dict)}")

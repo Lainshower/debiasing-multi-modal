@@ -17,7 +17,7 @@ from PIL import Image
 
 class WaterbirdsEmbeddings(Dataset):
     def __init__(self, data_dir='./data/waterbirds/waterbird_complete95_forest2water2', split='train',
-                 embedding_dir='./data/embeddings/waterbirds/RN50/embedding_prediction.json', transform=None, zs_group_label=None):
+                 embedding_dir='./data/embeddings_unnormalized/waterbirds/RN50/embedding_prediction.json', transform=None):
         self.data_dir = data_dir
         self.split = split
         self.embedding_dir = embedding_dir
@@ -56,11 +56,6 @@ class WaterbirdsEmbeddings(Dataset):
         # Attribute for noisy label detection
         self.noise_or_not = np.abs(self.y_array - self.confounder_array)  # 1 if minor (noisy)
 
-        self.zs_group_label = zs_group_label
-        if zs_group_label:
-            self.preds_group_zeroshot = torch.tensor(np.load(zs_group_label))
-            self.noise_or_not = (self.targets_group != self.preds_group_zeroshot).long().numpy()  # 1 if noisy
-
     def __len__(self):
         return len(self.filename_array)
 
@@ -91,14 +86,14 @@ class WaterbirdsEmbeddings(Dataset):
 
 
     
-def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None, zs_group_label=None):
-    train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform, zs_group_label)
+def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None):
+    train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 
-    val_set = WaterbirdsEmbeddings(data_dir, 'val', embedding_dir, transform, zs_group_label)
+    val_set = WaterbirdsEmbeddings(data_dir, 'val', embedding_dir, transform)
     val_loader = DataLoader(val_set, batch_size=bs_val, shuffle=False, num_workers=num_workers)
 
-    test_set = WaterbirdsEmbeddings(data_dir, 'test', embedding_dir, transform, zs_group_label)
+    test_set = WaterbirdsEmbeddings(data_dir, 'test', embedding_dir, transform)
     test_loader = DataLoader(test_set, batch_size=bs_val, shuffle=False, num_workers=num_workers)
 
     return train_loader, val_loader, test_loader
