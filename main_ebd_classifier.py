@@ -38,7 +38,7 @@ new_order_for_print = [
 ]
 from functools import partial
 
-class LinearClassifier(nn.Module):
+class LinearClassifier(nn.Module): # Linear probing
     def __init__(self, input_dim, num_classes=2):
         super(LinearClassifier, self).__init__()
         self.fc = nn.Linear(input_dim, num_classes)
@@ -48,7 +48,7 @@ class LinearClassifier(nn.Module):
 
 
 
-class CustomCLIP(nn.Module):
+class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
     def __init__(self, adapter, text_embedding_dir, text_spurious_embedding_dir, temperature=0.01):
         super().__init__()
         self.text_embedding_dir = text_embedding_dir
@@ -57,6 +57,7 @@ class CustomCLIP(nn.Module):
         self.temperature = temperature # CA default : 0.01, B2T default : 0.02 (?) NOTE
         
         self.text_features = get_text_embedding(self.text_embedding_dir)
+        self.n_cls = self.text_features.shape[0]
         self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir)
         
     def forward(self, features): 
@@ -499,7 +500,8 @@ def train_all_epochs(opt):
     train_group_ratio = trainset.group_ratio
     
     # build model and criterion
-    classifier, criterion = set_model(opt) # model, 
+    classifier, criterion = set_model(opt) # model,  # CE
+    # cl_loss = # Contrastive adpater
 
     # build optimizer
     print("Set Optimizer: SGD (default)")
@@ -571,7 +573,7 @@ def train_all_epochs(opt):
     elif opt.tl_method in ["adapter", "contrastive_adapt"]: 
         print(f" ㄴ Note that it should be same to [best test accuracy on [{opt.train_target}]], above, in {opt.tl_method}")
     
-    # Zero-shot [spurious] prediction
+    # Zero-shot [spurious] prediction 
     zs_loss_spurious, zs_acc_spurious, zs_group_acc_spurious = validate_zs(opt, test_loader, best_model, criterion, get_yp_func, train_group_ratio, target="spurious", print_label='zero-shot prediction (test) (spurious)')    
     print(f" ㄴ Note that it is related to [richness of non-target (spurious) information] (-> 'mean_acc' is important)")
     

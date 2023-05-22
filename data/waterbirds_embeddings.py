@@ -26,8 +26,9 @@ class WaterbirdsEmbeddings(Dataset):
         self.metadata_df = pd.read_csv(os.path.join(self.data_dir, 'metadata.csv'))
         self.metadata_df = self.metadata_df[self.metadata_df['split'] == self.split_dict[self.split]]
 
+        print(self.embedding_dir)
         self.embeddings_df = pd.read_json(self.embedding_dir) # key : image_filename
-        indices_to_convert = ['y', 'place', 'group', 'y_pred'] # str -> index
+        indices_to_convert = ['y', 'place', 'group', 'y_pred', 'split'] # str -> int
         self.embeddings_df.loc[indices_to_convert] = self.embeddings_df.loc[indices_to_convert].astype('int64')
         
         # Get the y values
@@ -52,24 +53,29 @@ class WaterbirdsEmbeddings(Dataset):
         # For calcultating weighted test mean acc. (using training distribution.)
         self.group_counts = (torch.arange(self.n_groups).unsqueeze(1) == torch.from_numpy(self.group_array)).sum(1).float()
         self.group_ratio = self.group_counts / len(self)
+        
+        # When indexing in contrastive batch sampling (중복되는 샘플 생길 경우 트리거)
+        self.on_contrastive_batch = False
 
-        # Attribute for noisy label detection
-        self.noise_or_not = np.abs(self.y_array - self.confounder_array)  # 1 if minor (noisy)
+
 
     def __len__(self):
         return len(self.filename_array)
 
     def __getitem__(self, idx):
         img_filename = self.filename_array[idx]
-        # img_filename = os.path.join(self.data_dir, img_filename)
-        # img = Image.open(img_filename).convert('RGB')
-        ebd_full = self.embeddings_df[img_filename]
-
-        ebd_y = ebd_full['y']
-        ebd_y_group = ebd_full['group']
-        ebd_y_spurious = ebd_full['place']
-        ebd_y_pred = ebd_full['y_pred']
-        ebd = torch.from_numpy(np.array(ebd_full['image_embedding'])).float()
+        
+        if not self.on_contrastive_batch: # on Normal Embedding Batch
+            ebd_full = self.embeddings_df[img_filename]            
+        else: # on Contrastive Batch
+            ebd_full = self.embeddings_df.iloc[:, idx]
+        
+        ebd_y = ebd_full.loc['y']
+        ebd_y_group = ebd_full.loc['group']
+        ebd_y_spurious = ebd_full.loc['place']
+        ebd_y_pred = ebd_full.loc['y_pred']
+        # print(idx, img_filename)
+        ebd = torch.from_numpy(np.array(ebd_full.loc['image_embedding'])).float()
         
         y = self.targets[idx]
         y_group = self.targets_group[idx]
@@ -77,15 +83,10 @@ class WaterbirdsEmbeddings(Dataset):
 
         assert ((y==ebd_y) and (y_group==ebd_y_group) and (y_spurious==ebd_y_spurious)), f"inconsistency between {os.path.join(self.data_dir, 'metadata.csv')} and {self.embedding_dir}\n \
             Should be same: y: {y}=={ebd_y} | group: {y_group}=={ebd_y_group} | spurious_attribute: {y_spurious}=={ebd_y_spurious} "
-        # if self.zs_group_label:
-        #     y_group_zs = self.preds_group_zeroshot[idx]
-        #     return x, (y, y_group, y_spur gious, y_group_zs), idx
 
         return ebd, {"class": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename
     
 
-
-    
 def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None):
     train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)

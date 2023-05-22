@@ -53,15 +53,18 @@ class CelebaEmbeddings(Dataset):
         # NOTE for calcultating weighted test mean acc. (using training distribution.)
         self.group_counts = (torch.arange(self.n_groups).unsqueeze(1) == torch.from_numpy(self.group_array)).sum(1).float()
         self.group_ratio = self.group_counts / len(self)
+        
+        self.on_contrastive_batch = False
 
     def __len__(self):
         return len(self.filename_array)
 
     def __getitem__(self, idx):
         img_filename = self.filename_array[idx]
-        # img_filename = os.path.join(self.data_dir, 'img_align_celeba/img_align_celeba', self.filename_array[idx])
-        # img = Image.open(img_filename).convert('RGB')
-        ebd_full = self.embeddings_df[img_filename]
+        if not self.on_contrastive_loader: # Normal Embedding Batch
+            ebd_full = self.embeddings_df[img_filename]
+        else: # Contrastive Batch
+            ebd_full = self.embeddings_df.iloc[:, idx]
 
         ebd_y = ebd_full['blond']
         ebd_y_group = ebd_full['group']
@@ -102,10 +105,10 @@ def load_celeba_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, nu
     train_set = CelebaEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 
-    val_set = CelebaEmbeddings(data_dir, 'train', embedding_dir, transform)
+    val_set = CelebaEmbeddings(data_dir, 'val', embedding_dir, transform)
     val_loader = DataLoader(val_set, batch_size=bs_val, shuffle=False, num_workers=num_workers)
 
-    test_set = CelebaEmbeddings(data_dir, 'train', embedding_dir, transform)
+    test_set = CelebaEmbeddings(data_dir, 'test', embedding_dir, transform)
     test_loader = DataLoader(test_set, batch_size=bs_val, shuffle=False, num_workers=num_workers)
 
     return train_loader, val_loader, test_loader
