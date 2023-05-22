@@ -46,8 +46,6 @@ class LinearClassifier(nn.Module): # Linear probing
     def forward(self, features):
         return self.fc(features)
 
-
-
 class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
     def __init__(self, adapter, text_embedding_dir, text_spurious_embedding_dir, temperature=0.01):
         super().__init__()
@@ -64,9 +62,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
+        text_features = self.text_features / self.text_features.norm(dim=-1, keepdim=True)# (Pre) Normalized (2, 1024)
         
-        logits = image_features @ text_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
+        logits = image_features @ text_features / self.temperature # (B, 1024) X (2, 1024) = # (B, 2)
         
         return logits
     
@@ -74,9 +72,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_spurious_features = self.text_spurious_features # (Pre) Normalized (B, 2, 1024)
+        text_spurious_features = self.text_spurious_features / self.text_spurious_features.norm(dim=-1, keepdim=True) # (Pre) Normalized (2, 1024)
         
-        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
+        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (2, 1024) = # (B, 2)
         
         return logits
         
