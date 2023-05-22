@@ -626,7 +626,7 @@ def plot_umap_all(embeddings_train, embeddings_val, embeddings_test, meta_result
         
     if save:
         fpath = f'{save_id}{ftype}'
-        if os.path.exists("figure"):
+        if not os.path.exists("figure"):
             os.mkdir("figure")
         fpath = os.path.join("figure", fpath)
         plt.savefig(fname=fpath, dpi=300, bbox_inches="tight")
