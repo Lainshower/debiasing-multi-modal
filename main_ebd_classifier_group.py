@@ -144,6 +144,8 @@ def parse_option():
                         help='extracted image embedding')
     parser.add_argument('--text_embedding_dir', type=str,
                         help='extracted text embedding')
+    parser.add_argument('--group_embedding_dir', type=str,
+                        help='extracted group embedding')
     parser.add_argument('--text_spurious_embedding_dir', type=str,
                         help='extracted text embedding (about spurious attributes)')
     parser.add_argument('--train_target', type=str, default="class", choices=["class", "spurious", "group"]) # label for prediction.
@@ -161,8 +163,6 @@ def parse_option():
       # -> Zero-shot으로 대체하는 게 맞을듯.
 
     opt = parser.parse_args()
-    
-    if opt.
 
     # set the path according to the environment
 
@@ -203,7 +203,11 @@ def set_model(opt):
     elif opt.tl_method =='adapter':
         print("Off-the-shelf classifier : [Adapter + (temperatured) image-text jointly normalized prediction]")
         adapter = Adapter(input_dim = input_dim, hidden_dim = opt.adapter_feat_dim) # Fixed by heuristics
-        classifier = CustomCLIP(adapter, opt.text_embedding_dir, opt.text_spurious_embedding_dir, temperature=opt.zs_temperature)
+        classifier = CustomCLIP(adapter, opt.text_embedding_dir, opt.text_spurious_embedding_dir, opt.text_group_embedding_dir, temperature=opt.zs_temperature)
+    elif opt.tl_method =='adapter_reg':
+        print("Off-the-shelf classifier : [Adapter + (temperatured) image-text jointly normalized prediction] with group regularized training")
+        adapter = Adapter(input_dim = input_dim, hidden_dim = opt.adapter_feat_dim) # Fixed by heuristics
+        classifier = CustomCLIP(adapter, opt.text_embedding_dir, opt.text_spurious_embedding_dir, opt.text_group_embedding_dir, temperature=opt.zs_temperature)
 
     if torch.cuda.is_available():
         classifier = classifier.cuda()
