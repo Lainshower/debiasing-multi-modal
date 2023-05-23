@@ -67,13 +67,13 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
 
         #NOTE Joonwon Added
         if use_group:
-            text_features = get_text_embedding(self.text_group_embedding_dir) # (Pre) Normalized (B, 2, 1024)
+            text_features = get_text_embedding(self.text_group_embedding_dir) # Normalized (1024, 4) (4 맞나?) 
         else:
-            text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
+            text_features = self.text_features # Normalized (1024, 2)
         
         # Check if we have to normalize the text features
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-        logits = image_features @ text_features / self.temperature # (B, 1024) X (B, C, 1024) = # (B, C)
+        text_features = text_features / text_features.norm(dim=0, keepdim=True) # NOTE dim=-1 -> dim=0 수정 (jinsu)
+        logits = image_features @ text_features / self.temperature # (B, 1024) X (1024, C) = # (B, C)
         
         return logits
     
@@ -81,9 +81,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_spurious_features = self.text_spurious_features # (Pre) Normalized (B, 2, 1024)
+        text_spurious_features = self.text_spurious_features / self.text_spurious_features.norm(dim=0, keepdim=True) # Normalization
         
-        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
+        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (1024, 2) = # (B, 2)
         
         return logits
     
@@ -255,7 +255,7 @@ def get_text_embedding(text_embedding_dir):
     text_features = []
     for class_template, class_embedding in text_embeddings.items():
         text_features.append(torch.tensor(class_embedding))
-    text_features = torch.stack(text_features, dim=1).cuda() # (B, 2, 1024)
+    text_features = torch.stack(text_features, dim=1) # cuda 제외 (validate 쪽으로 뺌), (1024, 2)
     
     
     return text_features
@@ -477,6 +477,8 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             text_embeddings = get_text_embedding(opt.text_embedding_dir)
         elif target=='spurious':
             text_embeddings = get_text_embedding(opt.text_spurious_embedding_dir)
+        text_embeddings = text_embeddings.cuda() # Cuda 추가.
+        text_embeddings = text_embeddings / text_embeddings.norm(dim=0, keepdim=True) # (1024, 2) -> dimension 수정.
         
     batch_time = AverageMeter()
     losses = AverageMeter()
