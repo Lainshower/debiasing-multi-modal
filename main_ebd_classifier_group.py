@@ -57,9 +57,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         self.adapter = adapter
         self.temperature = temperature # CA default : 0.01, B2T default : 0.02 (?) NOTE
         
-        self.text_features = get_text_embedding(self.text_embedding_dir).cuda()
+        self.text_features = get_text_embedding(self.text_embedding_dir)
         self.n_cls = self.text_features.shape[0]
-        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir).cuda()
+        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir)
         
     def forward(self, features, use_group=False): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
@@ -67,13 +67,13 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
 
         #NOTE Joonwon Added
         if use_group:
-            text_features = get_text_embedding(self.text_group_embedding_dir) # Normalized (1024, 4) (4 맞나?) 
+            text_features = get_text_embedding(self.text_group_embedding_dir) # (Pre) Normalized (B, 2, 1024)
         else:
-            text_features = self.text_features # Normalized (1024, 2)
+            text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
         
         # Check if we have to normalize the text features
-        text_features = text_features / text_features.norm(dim=0, keepdim=True) # NOTE dim=-1 -> dim=0 수정 (jinsu)
-        logits = image_features @ text_features / self.temperature # (B, 1024) X (1024, C) = # (B, C)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        logits = image_features @ text_features / self.temperature # (B, 1024) X (B, C, 1024) = # (B, C)
         
         return logits
     
@@ -81,9 +81,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_spurious_features = self.text_spurious_features / self.text_spurious_features.norm(dim=0, keepdim=True) # Normalization
+        text_spurious_features = self.text_spurious_features # (Pre) Normalized (B, 2, 1024)
         
-        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (1024, 2) = # (B, 2)
+        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
         
         return logits
     
@@ -144,7 +144,7 @@ def parse_option():
                         help='extracted image embedding')
     parser.add_argument('--text_embedding_dir', type=str,
                         help='extracted text embedding')
-    parser.add_argument('--group_embedding_dir', type=str,
+    parser.add_argument('--text_group_embedding_dir', type=str,
                         help='extracted group embedding')
     parser.add_argument('--text_spurious_embedding_dir', type=str,
                         help='extracted text embedding (about spurious attributes)')
@@ -255,7 +255,7 @@ def get_text_embedding(text_embedding_dir):
     text_features = []
     for class_template, class_embedding in text_embeddings.items():
         text_features.append(torch.tensor(class_embedding))
-    text_features = torch.stack(text_features, dim=1) # cuda 제외 (validate 쪽으로 뺌), (1024, 2)
+    text_features = torch.stack(text_features, dim=1).cuda() # (B, 2, 1024)
     
     
     return text_features
@@ -340,8 +340,6 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
     acc_groups = {g_idx : AverageMeter() for g_idx in range(train_loader1.dataset.n_groups)}
 
     end = time.time()
-
-
     for dataloader, use_group in zip([train_loader1, train_loader2], [False, True]):
         for idx, data in enumerate(dataloader):  
             
@@ -393,12 +391,12 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
                         data_time=data_time, loss=losses, acc=acc))
                     sys.stdout.flush()
                 
-        group_acc = get_results(acc_groups, get_yp_func) # NOTE declared in [def main]
-        group_acc = {key: group_acc[key] for key in new_order_for_print[1:]}
-        group_acc = {key: np.round(value, 4) for key, value in group_acc.items()}
-        print(f"{print_label}:", str(group_acc))
-        
-        return losses.avg, acc.avg, group_acc
+    group_acc = get_results(acc_groups, get_yp_func) # NOTE declared in [def main]
+    group_acc = {key: group_acc[key] for key in new_order_for_print[1:]}
+    group_acc = {key: np.round(value, 4) for key, value in group_acc.items()}
+    print(f"{print_label}:", str(group_acc))
+    
+    return losses.avg, acc.avg, group_acc
 
 def validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ratio, target, print_label='Test'):
     """validation"""
@@ -408,7 +406,10 @@ def validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ra
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
-    acc_groups = {g_idx : AverageMeter() for g_idx in range(val_loader.dataset.n_groups)}
+    try:
+        acc_groups = {g_idx : AverageMeter() for g_idx in range(val_loader.dataset.dataset.n_groups)}
+    except:
+        acc_groups = {g_idx : AverageMeter() for g_idx in range(val_loader.dataset.n_groups)}
 
     with torch.no_grad():
         end = time.time()
@@ -449,7 +450,10 @@ def validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ra
     group_acc = get_results(acc_groups, get_yp_func)
 
     # NOTE Add Weighted mean acc.
-    groups = range(val_loader.dataset.n_groups) # 0, 1, 2, 3
+    try:
+        groups = range(val_loader.dataset.dataset.n_groups) # 0, 1, 2, 3
+    except:
+        groups = range(val_loader.dataset.n_groups) # 0, 1, 2, 3
     group_acc_indiv =  [group_acc[f"acc_{get_yp_func(g)[0]}_{get_yp_func(g)[1]}"] for g in groups]
     weighted_mean_acc = (np.array(group_acc_indiv) * np.array(train_group_ratio)).sum() # Weighted Sum \
     
@@ -477,8 +481,6 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             text_embeddings = get_text_embedding(opt.text_embedding_dir)
         elif target=='spurious':
             text_embeddings = get_text_embedding(opt.text_spurious_embedding_dir)
-        text_embeddings = text_embeddings.cuda() # Cuda 추가.
-        text_embeddings = text_embeddings / text_embeddings.norm(dim=0, keepdim=True) # (1024, 2) -> dimension 수정.
         
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -591,6 +593,7 @@ def train_all_epochs(opt):
     train_group_ratio = trainset.group_ratio
     
     # build model and criterion
+
     classifier, criterion = set_model(opt) # model,  # CE
     # cl_loss = # Contrastive adpater
 
@@ -619,8 +622,8 @@ def train_all_epochs(opt):
         
         # train one epoch
         if opt.tl_method == "adapter_reg":
-            loss, acc. group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion,
-                          optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
+            loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
+                                                       optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
         else:
             loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
                           optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
