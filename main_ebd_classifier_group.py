@@ -57,9 +57,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         self.adapter = adapter
         self.temperature = temperature # CA default : 0.01, B2T default : 0.02 (?) NOTE
         
-        self.text_features = get_text_embedding(self.text_embedding_dir)
+        self.text_features = get_text_embedding(self.text_embedding_dir).cuda()
         self.n_cls = self.text_features.shape[0]
-        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir)
+        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir).cuda()
         
     def forward(self, features, use_group=False): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
