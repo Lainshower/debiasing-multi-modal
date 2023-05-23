@@ -91,15 +91,18 @@ def stratified_split_dataset(dataset, test_size=0.5):
     """
     Splits a dataset in a stratified fashion using its targets, returning two Subset objects representing the train and test splits.
     """
-    reg_subset, val_subset = train_test_split(
-        dataset,
+    reg_idx, val_idx = train_test_split(
+        np.arange(len(dataset.group_array)),
         test_size=test_size,
         random_state=42, # For Debugging 
-        stratify=dataset.y_group)
-
+        stratify=dataset.group_array)
+    
+    reg_subset = torch.utils.data.Subset(dataset, reg_idx)
+    val_subset = torch.utils.data.Subset(dataset, val_idx)
+    
     return reg_subset, val_subset
 
-def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None):
+def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=1024, bs_val=512, num_workers=8, transform=None):
     train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 
