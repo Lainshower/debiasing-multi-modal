@@ -49,11 +49,11 @@ class LinearClassifier(nn.Module): # Linear probing
 
 
 class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
-    def __init__(self, adapter, text_embedding_dir, text_spurious_embedding_dir, temperature=0.01):
+    def __init__(self, adapter, text_embedding_dir, text_spurious_embedding_dir, text_group_embedding_dir, temperature=0.01):
         super().__init__()
         self.text_embedding_dir = text_embedding_dir 
         self.text_spurious_embedding_dir = text_spurious_embedding_dir
-        self.text_group_embedding_dir = text_group_embedding_dir#NOTE 준원
+        self.text_group_embedding_dir = text_group_embedding_dir #NOTE Joonwon Added
         self.adapter = adapter
         self.temperature = temperature # CA default : 0.01, B2T default : 0.02 (?) NOTE
         
@@ -61,13 +61,19 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         self.n_cls = self.text_features.shape[0]
         self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir)
         
-    def forward(self, features): 
+    def forward(self, features, use_group=False): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_features = self.text_features # (Pre) Normalized (B, 2, 1024) #NOTE 준원 4차원 될것
+        #NOTE Joonwon Added
+        if use_group:
+            text_features = get_text_embedding(self.text_group_embedding_dir) # (Pre) Normalized (B, 2, 1024)
+        else:
+            text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
         
-        logits = image_features @ text_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
+        # Check if we have to normalize the text features
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        logits = image_features @ text_features / self.temperature # (B, 1024) X (B, C, 1024) = # (B, C)
         
         return logits
     
@@ -81,7 +87,6 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         
         return logits
     
-    def #NOTE 준원
 class Adapter(nn.Module):
     """
     - Residual connetion : 제외 (original Adapter - 0.2*images + 0.8*adapter)
@@ -156,6 +161,8 @@ def parse_option():
       # -> Zero-shot으로 대체하는 게 맞을듯.
 
     opt = parser.parse_args()
+    
+    if opt.
 
     # set the path according to the environment
 
@@ -248,6 +255,7 @@ def get_text_embedding(text_embedding_dir):
     
     
     return text_features
+
 #NOTE 이거랑 유사한 함수를 하나 더 만들거나, if 문 넣어서 if predict_group: criterion(embeddings, group) else: criterion(embeddings, labels)
 def train_one_epoch(opt, train_loader, classifier, criterion, optimizer, epoch, get_yp_func, target, print_label='Train', predict_group = True): # model,
     """one epoch training"""
@@ -277,8 +285,8 @@ def train_one_epoch(opt, train_loader, classifier, criterion, optimizer, epoch, 
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
 
         # compute loss
-        output = classifier(embeddings.detach())  #NOTE 준원
-        loss = criterion(output, labels) #NOTE 준원 -> groups 0:"LL" 1:"LW" 2:WL 3:WW
+        output = classifier(embeddings.detach())  
+        loss = criterion(output, labels) 
 
         # update metric
         losses.update(loss.item(), bsz)
@@ -315,6 +323,78 @@ def train_one_epoch(opt, train_loader, classifier, criterion, optimizer, epoch, 
     
     return losses.avg, acc.avg, group_acc
 
+# NOTE joonwon added
+def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion, optimizer, epoch, get_yp_func, target, print_label='Train', predict_group = True): # model,
+    """one epoch training with regulalizar"""
+    # model.eval()
+    classifier.train()
+
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+    losses = AverageMeter()
+    acc = AverageMeter()
+    acc_groups = {g_idx : AverageMeter() for g_idx in range(train_loader1.dataset.n_groups)}
+
+    end = time.time()
+
+
+    for dataloader, use_group in zip([train_loader1, train_loader2], [False, True]):
+        for idx, data in enumerate(dataloader):  
+            
+            embeddings, all_labels, img_filenames = data # all_labels.keys() : ['class', 'group', 'spurious', 'ebd_pred'(CLIP-zeroshot)] 
+            labels = all_labels[target] # target : one of [y, spurious, group]
+            groups = all_labels['group'] # For evaluating group accuracy (and further developing group-information-aware approaches)
+        
+            data_time.update(time.time() - end)
+
+            embeddings = embeddings.cuda(non_blocking=True)
+            # NOTE joonwon added
+            if use_group:
+                labels = groups
+            labels = labels.cuda(non_blocking=True)
+            bsz = labels.shape[0]
+
+            # warm-up learning rate
+            warmup_learning_rate(opt, epoch, idx, len(dataloader), optimizer)
+
+            # compute loss
+            output = classifier(embeddings.detach(), use_group)  
+            loss = criterion(output, labels) 
+
+            # update metric
+            losses.update(loss.item(), bsz)
+            acc1 = accuracy(output, labels, bsz)
+            acc.update(acc1, bsz)
+
+            # SGD
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+            
+            # Update acc dict
+            update_dict(acc_groups, labels, groups, output)
+            
+            if opt.watch_batch_results:
+                if (idx + 1) % opt.print_freq == 0:
+                    print(f'{print_label}: [{0}][{1}/{2}]\t'
+                        'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                        'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                        'loss {loss.val:.3f} ({loss.avg:.3f})\t'
+                        'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
+                        epoch, idx + 1, len(dataloader), batch_time=batch_time,
+                        data_time=data_time, loss=losses, acc=acc))
+                    sys.stdout.flush()
+                
+        group_acc = get_results(acc_groups, get_yp_func) # NOTE declared in [def main]
+        group_acc = {key: group_acc[key] for key in new_order_for_print[1:]}
+        group_acc = {key: np.round(value, 4) for key, value in group_acc.items()}
+        print(f"{print_label}:", str(group_acc))
+        
+        return losses.avg, acc.avg, group_acc
 
 def validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ratio, target, print_label='Test'):
     """validation"""
@@ -474,10 +554,11 @@ def train_all_epochs(opt):
         print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
         # build data loader
         print("Load Data Loader (train, validation, test)")
-        train_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
-        torch 내장 SPLIT_by_index #NOTE 준원 -> groups 0:"LL" 1:"LW" 2:WL 3:WW
-        val_loader_for_train, val_loader_for_validation = # 반반
-        # print training target
+        if opt.tl_method == "adapter_reg":
+            from data.waterbirds_embeddings_reg import WaterbirdsEmbeddings, load_waterbirds_embeddings
+            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+        else:
+            train_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
         if opt.train_target == "class":
             print(f"Training target : {opt.train_target} (Land bird(0) / Water bird(1))")
         elif opt.train_target == "spurious":
@@ -529,22 +610,17 @@ def train_all_epochs(opt):
         adjust_learning_rate(opt, optimizer, epoch)
         print(f'--- Epoch {epoch} ---')
         
-        
-        # NOTE 준원
-        loss, acc, group_acc = train_one_epoch_group(opt, val_loader_for_train, classifier, criterion,
-                          optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
-        
-        # train_losses.append(loss); train_accs.append(acc); train_group_accs.append(group_acc)
-        
         # train one epoch
-        loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
+        if opt.tl_method == "adapter_reg":
+            loss, acc. group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion,
                           optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
-        
+        else:
+            loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
+                          optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
         train_losses.append(loss); train_accs.append(acc); train_group_accs.append(group_acc)
         
         # eval for one epoch
-        # NOTE 준원 
-        val_loss, val_acc, val_group_acc = validate(opt, val_loader_for_validation, classifier, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})')
+        val_loss, val_acc, val_group_acc = validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})')
         val_losses.append(val_loss); val_accs.append(val_acc); val_group_accs.append(val_group_acc)
         
         # update best epoch by worst_group accuracy (default)

@@ -15,7 +15,7 @@ epochs=100
 dataset="waterbirds"
 data_dir="/home/jinsu/workstation/project/debiasing-multi-modal/data/waterbirds/waterbird_complete95_forest2water2"
 
-tl_method="adapter"
+tl_method="adapter_reg"
 # target="spurious" # [class, spurious]
 # non_target="class" # [spurious, class] 
 
