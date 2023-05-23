@@ -62,7 +62,7 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_features = self.text_features / self.text_features.norm(dim=-1, keepdim=True)# (Pre) Normalized (2, 1024)
+        text_features = self.text_features / self.text_features.norm(dim=0, keepdim=True)# (Pre) Normalized (2, 1024)
         
         logits = image_features @ text_features / self.temperature # (B, 1024) X (2, 1024) = # (B, 2)
         
@@ -72,7 +72,7 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_spurious_features = self.text_spurious_features / self.text_spurious_features.norm(dim=-1, keepdim=True) # (Pre) Normalized (2, 1024)
+        text_spurious_features = self.text_spurious_features / self.text_spurious_features.norm(dim=0, keepdim=True) # (Pre) Normalized (2, 1024)
         
         logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (2, 1024) = # (B, 2)
         
