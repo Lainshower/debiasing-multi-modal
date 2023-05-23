@@ -151,7 +151,7 @@ def parse_option():
     parser.add_argument('--train_target', type=str, default="class", choices=["class", "spurious", "group"]) # label for prediction.
     parser.add_argument('--data_dir', type=str,
                     help='folder, in which metadata.csv] exist')
-    parser.add_argument('--tl_method', type=str, default= "linear_probing", choices=["linear_probing", "adapter", "contrastive_adapter", "ETC"]
+    parser.add_argument('--tl_method', type=str, default= "linear_probing", choices=["linear_probing", "adapter", "adapter_reg", "contrastive_adapter", "ETC"]
                         ,help='transfer learning method')
     parser.add_argument('--adapter_feat_dim', type=int, default= 128, help='reduced dimension in adapter')
     parser.add_argument('--zs_temperature', type=float, default= 0.01, help='Temperature in zero-shot prediction')
@@ -552,16 +552,17 @@ def train_all_epochs(opt):
     print(f"> Start Transfer Learning using [{opt.tl_method}]")
     print('========================================================================')
     if opt.dataset == 'waterbirds':
-        # build dataset example.
-        print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
-        trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-        print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
         # build data loader
-        print("Load Data Loader (train, validation, test)")
         if opt.tl_method == "adapter_reg":
             from data.waterbirds_embeddings_reg import WaterbirdsEmbeddings, load_waterbirds_embeddings
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print("Load Data Loader (train, validation, test)")
             train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
         else:
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
             train_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
         if opt.train_target == "class":
             print(f"Training target : {opt.train_target} (Land bird(0) / Water bird(1))")
