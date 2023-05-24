@@ -5,7 +5,14 @@ Embedding Loader
 - ETC
 """
 
-
+# function for checking whether splited validation sets have same group distribution
+# from collections import Counter
+# def count_unique_group_values(dataset):
+#     group_counts = Counter()
+#     for _, meta_data, _ in dataset:
+#         group = meta_data['group'].item()
+#         group_counts[group] += 1
+#     return group_counts
 
 import os
 import pandas as pd
@@ -99,10 +106,9 @@ def stratified_split_dataset(dataset, test_size=0.5):
     
     reg_subset = torch.utils.data.Subset(dataset, reg_idx)
     val_subset = torch.utils.data.Subset(dataset, val_idx)
-    
     return reg_subset, val_subset
 
-def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=1024, bs_val=512, num_workers=8, transform=None):
+def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=256, num_workers=8, transform=None):
     train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 

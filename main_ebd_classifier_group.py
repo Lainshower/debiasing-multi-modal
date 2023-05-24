@@ -114,7 +114,7 @@ def parse_option():
                         help='batch_size')
     parser.add_argument('--num_workers', type=int, default=16,
                         help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='number of training epochs')
 
     # optimization
@@ -341,6 +341,7 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
 
     end = time.time()
     for dataloader, use_group in zip([train_loader1, train_loader2], [False, True]):
+
         for idx, data in enumerate(dataloader):  
             
             embeddings, all_labels, img_filenames = data # all_labels.keys() : ['class', 'group', 'spurious', 'ebd_pred'(CLIP-zeroshot)] 
@@ -351,7 +352,7 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
 
             embeddings = embeddings.cuda(non_blocking=True)
             # NOTE joonwon added
-            if use_group:
+            if use_group is True:
                 labels = groups
             labels = labels.cuda(non_blocking=True)
             bsz = labels.shape[0]
@@ -364,9 +365,10 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
             loss = criterion(output, labels) 
 
             # update metric
-            losses.update(loss.item(), bsz)
-            acc1 = accuracy(output, labels, bsz)
-            acc.update(acc1, bsz)
+            if use_group is False:
+                losses.update(loss.item(), bsz)
+                acc1 = accuracy(output, labels, bsz)
+                acc.update(acc1, bsz)
 
             # SGD
             optimizer.zero_grad()
@@ -378,7 +380,8 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
             end = time.time()
             
             # Update acc dict
-            update_dict(acc_groups, labels, groups, output)
+            if use_group is False:
+                update_dict(acc_groups, labels, groups, output)
             
             if opt.watch_batch_results:
                 if (idx + 1) % opt.print_freq == 0:
@@ -562,7 +565,7 @@ def train_all_epochs(opt):
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
             print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 128)
         else:
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
