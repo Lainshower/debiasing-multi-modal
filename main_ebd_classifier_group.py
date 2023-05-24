@@ -72,14 +72,14 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
             text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
         
         # Check if we have to normalize the text features
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        text_features = text_features / text_features.norm(dim=0, keepdim=True)
         logits = image_features @ text_features / self.temperature # (B, 1024) X (B, C, 1024) = # (B, C)
         
         return logits
     
     def forward_spurious(self, features): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
+        image_features = image_features / image_features.norm(dim=0, keepdim=True) # Normalized (B, 1024)
 
         text_spurious_features = self.text_spurious_features # (Pre) Normalized (B, 2, 1024)
         
@@ -576,7 +576,7 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             bsz = labels.shape[0]
             
             if opt.tl_method in ['linear_probing']: # same to CLIP Embedding
-                image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
+                image_embeddings = image_embeddings / image_embeddings.norm(dim=0, keepdim=True) # Normalized (B, 1024)
                 output = image_embeddings @ text_embeddings / temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
                 
             elif opt.tl_method in ['adapter', 'adapter_reg', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
@@ -700,15 +700,15 @@ def train_all_epochs(opt):
         # train one epoch
         if opt.tl_method == "adapter_reg":
             # Alternative Training
-            # loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
-            #                                            optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
-            if epoch < 50:
-            # Sequetional Training
-                loss, acc, group_acc = train_reg_seq_one_epoch(opt, train_loader, classifier, criterion, 
-                                                        optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})', use_group=False)
-            else:
-                loss, acc, group_acc = train_reg_seq_one_epoch(opt, reg_loader, classifier, criterion, 
-                                                        optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})' , use_group=True)
+             loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
+                                                        optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
+            # if epoch <= 50:
+            # # Sequetional Training
+            #     loss, acc, group_acc = train_reg_seq_one_epoch(opt, train_loader, classifier, criterion, 
+            #                                             optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})', use_group=False)
+            # else:
+            #     loss, acc, group_acc = train_reg_seq_one_epoch(opt, reg_loader, classifier, criterion, 
+            #                                             optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})' , use_group=True)
         else:
             loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
                           optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
