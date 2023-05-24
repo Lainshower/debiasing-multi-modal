@@ -261,7 +261,8 @@ def get_text_embedding(text_embedding_dir):
     return text_features
 
 #NOTE 이거랑 유사한 함수를 하나 더 만들거나, if 문 넣어서 if predict_group: criterion(embeddings, group) else: criterion(embeddings, labels)
-def train_one_epoch(opt, train_loader, classifier, criterion, optimizer, epoch, get_yp_func, target, print_label='Train', predict_group = True): # model,
+def train_one_epoch(opt, train_loader, 
+                    classifier, criterion, optimizer, epoch, get_yp_func, target, print_label='Train', predict_group = True): # model,
     """one epoch training"""
     # model.eval()
     classifier.train()
@@ -393,6 +394,79 @@ def train_reg_one_epoch(opt, train_loader1, train_loader2, classifier, criterion
                         epoch, idx + 1, len(dataloader), batch_time=batch_time,
                         data_time=data_time, loss=losses, acc=acc))
                     sys.stdout.flush()
+                
+    group_acc = get_results(acc_groups, get_yp_func) # NOTE declared in [def main]
+    group_acc = {key: group_acc[key] for key in new_order_for_print[1:]}
+    group_acc = {key: np.round(value, 4) for key, value in group_acc.items()}
+    print(f"{print_label}:", str(group_acc))
+    
+    return losses.avg, acc.avg, group_acc
+
+def train_reg_seq_one_epoch(opt, train_loader, classifier, criterion, optimizer, epoch, get_yp_func, target, print_label='Train', predict_group = True, use_group=False): # model,
+    """one epoch training with regulalizar"""
+    # model.eval()
+    classifier.train()
+
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+    losses = AverageMeter()
+    acc = AverageMeter()
+    try: 
+        acc_groups = {g_idx : AverageMeter() for g_idx in range(train_loader.dataset.n_groups)}
+    except:
+        acc_groups = {g_idx : AverageMeter() for g_idx in range(train_loader.dataset.dataset.n_groups)}
+
+    end = time.time()
+    
+    for idx, data in enumerate(train_loader):  
+        
+        embeddings, all_labels, img_filenames = data # all_labels.keys() : ['class', 'group', 'spurious', 'ebd_pred'(CLIP-zeroshot)] 
+        labels = all_labels[target] # target : one of [y, spurious, group]
+        groups = all_labels['group'] # For evaluating group accuracy (and further developing group-information-aware approaches)
+    
+        data_time.update(time.time() - end)
+
+        embeddings = embeddings.cuda(non_blocking=True)
+        # NOTE joonwon added
+        if use_group is True:
+            labels = groups
+        labels = labels.cuda(non_blocking=True)
+        bsz = labels.shape[0]
+
+        # warm-up learning rate
+        warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
+
+        # compute loss
+        output = classifier(embeddings.detach(), use_group)  
+        loss = criterion(output, labels) 
+
+        # update metric
+        losses.update(loss.item(), bsz)
+        acc1 = accuracy(output, labels, bsz)
+        acc.update(acc1, bsz)
+
+        # SGD
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+        
+        # Update acc dict
+        update_dict(acc_groups, labels, groups, output)
+        
+        if opt.watch_batch_results:
+            if (idx + 1) % opt.print_freq == 0:
+                print(f'{print_label}: [{0}][{1}/{2}]\t'
+                    'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                    'loss {loss.val:.3f} ({loss.avg:.3f})\t'
+                    'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
+                    epoch, idx + 1, len(train_loader), batch_time=batch_time,
+                    data_time=data_time, loss=losses, acc=acc))
+                sys.stdout.flush()
                 
     group_acc = get_results(acc_groups, get_yp_func) # NOTE declared in [def main]
     group_acc = {key: group_acc[key] for key in new_order_for_print[1:]}
@@ -565,7 +639,7 @@ def train_all_epochs(opt):
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
             print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 256)
+            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 512)
         else:
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
@@ -625,8 +699,16 @@ def train_all_epochs(opt):
         
         # train one epoch
         if opt.tl_method == "adapter_reg":
-            loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
-                                                       optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
+            # Alternative Training
+            # loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
+            #                                            optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
+            if epoch < 50:
+            # Sequetional Training
+                loss, acc, group_acc = train_reg_seq_one_epoch(opt, train_loader, classifier, criterion, 
+                                                        optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})', use_group=False)
+            else:
+                loss, acc, group_acc = train_reg_seq_one_epoch(opt, reg_loader, classifier, criterion, 
+                                                        optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})' , use_group=True)
         else:
             loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
                           optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
