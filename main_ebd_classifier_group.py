@@ -505,7 +505,7 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
                 image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
                 output = image_embeddings @ text_embeddings / temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
                 
-            elif opt.tl_method in ['adapter', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
+            elif opt.tl_method in ['adapter', 'adapter_reg', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
                 # forward
                 if target=='class':
                     output = classifier(image_embeddings)
@@ -565,7 +565,7 @@ def train_all_epochs(opt):
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
             print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 128)
+            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 256)
         else:
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
