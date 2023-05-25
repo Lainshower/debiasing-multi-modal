@@ -788,7 +788,7 @@ def train_all_epochs(opt):
         text_ebd_file_name = os.path.basename(opt.text_embedding_dir).split(".")[0]
         
         # result name
-        final_result_file_name = f"im_{image_ebd_file_name}_t_{text_ebd_file_name}_tl_{opt.tl_method}_t_{opt.train_target}_lr_{opt.learning_rate}_bs_{opt.batch_size}"
+        final_result_file_name = f"im_{image_ebd_file_name}_t_{text_ebd_file_name}_tl_{opt.tl_method}_t_{opt.train_target}_lr_{opt.learning_rate}_bs_{opt.batch_size}_bsr_{opt.batch_size_reg}"
         
         # NOTE This file name can be modified when we add baselines
         """

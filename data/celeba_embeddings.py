@@ -54,7 +54,7 @@ class CelebaEmbeddings(Dataset):
         self.group_counts = (torch.arange(self.n_groups).unsqueeze(1) == torch.from_numpy(self.group_array)).sum(1).float()
         self.group_ratio = self.group_counts / len(self)
         
-        self.on_contrastive_batch = False
+        self.on_contrastive_loader = False
 
     def __len__(self):
         return len(self.filename_array)
