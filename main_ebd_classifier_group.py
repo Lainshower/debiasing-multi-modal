@@ -57,9 +57,9 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
         self.adapter = adapter
         self.temperature = temperature # CA default : 0.01, B2T default : 0.02 (?) NOTE
         
-        self.text_features = get_text_embedding(self.text_embedding_dir)
+        self.text_features = get_text_embedding(self.text_embedding_dir).cuda()
         self.n_cls = self.text_features.shape[0]
-        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir)
+        self.text_spurious_features = get_text_embedding(self.text_spurious_embedding_dir).cuda()
         
     def forward(self, features, use_group=False): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
@@ -67,7 +67,7 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
 
         #NOTE Joonwon Added
         if use_group:
-            text_features = get_text_embedding(self.text_group_embedding_dir) # (Pre) Normalized (B, 2, 1024)
+            text_features = get_text_embedding(self.text_group_embedding_dir).cuda() # (Pre) Normalized (B, 2, 1024)
         else:
             text_features = self.text_features # (Pre) Normalized (B, 2, 1024)
         
@@ -79,11 +79,13 @@ class CustomCLIP(nn.Module): # Adapter / Contrastive Adapter
     
     def forward_spurious(self, features): 
         image_features =  self.adapter(features) # Un-normalized (B, 1024)
-        image_features = image_features / image_features.norm(dim=0, keepdim=True) # Normalized (B, 1024)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
 
-        text_spurious_features = self.text_spurious_features # (Pre) Normalized (B, 2, 1024)
+        text_spurious_features = self.text_spurious_features # 
+        text_spurious_features = text_spurious_features / text_spurious_features.norm(dim=0, keepdim=True) # 
         
-        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
+        
+        logits = image_features @ text_spurious_features / self.temperature # (B, 1024) X (1024, 2) = # (B, 2)
         
         return logits
     
@@ -112,6 +114,8 @@ def parse_option():
                         help='save frequency')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='batch_size')
+    parser.add_argument('--batch_size_reg', type=int, default=128,
+                        help='batch_size for adpater_reg')
     parser.add_argument('--num_workers', type=int, default=16,
                         help='num of workers to use')
     parser.add_argument('--epochs', type=int, default=10,
@@ -255,7 +259,7 @@ def get_text_embedding(text_embedding_dir):
     text_features = []
     for class_template, class_embedding in text_embeddings.items():
         text_features.append(torch.tensor(class_embedding))
-    text_features = torch.stack(text_features, dim=1).cuda() # (B, 2, 1024)
+    text_features = torch.stack(text_features, dim=1) # (B, 2, 1024)
     
     
     return text_features
@@ -515,14 +519,14 @@ def validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ra
             # Update acc dict
             update_dict(acc_groups, labels, groups, output)
         
-            if opt.watch_batch_results:
-                if (idx+1) % opt.print_freq == 0:
-                    print(f'{print_label}: [{0}/{1}]\t'
-                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                        'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
-                        idx, len(val_loader), batch_time=batch_time,
-                        loss=losses, acc=acc))
+            # if opt.watch_batch_results:
+            #     if (idx+1) % opt.print_freq == 0:
+            #         print(f'{print_label}: [{0}/{1}]\t'
+            #             'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+            #             'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+            #             'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
+            #             idx, len(val_loader), batch_time=batch_time,
+            #             loss=losses, acc=acc))
                     
     group_acc = get_results(acc_groups, get_yp_func)
 
@@ -559,6 +563,7 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
         elif target=='spurious':
             text_embeddings = get_text_embedding(opt.text_spurious_embedding_dir)
         
+        text_embeddings = text_embeddings / text_embeddings.norm(dim=0, keepdim=True)
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
@@ -571,12 +576,13 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             labels = all_labels[target] # target : one of [class, spurious, group]
             groups = all_labels['group'] # For evaluating group accuracy (and further developing group-information-aware approaches)
             
+            text_embeddings = text_embeddings.cuda()
             image_embeddings = image_embeddings.float().cuda()
             labels = labels.cuda()
             bsz = labels.shape[0]
             
             if opt.tl_method in ['linear_probing']: # same to CLIP Embedding
-                image_embeddings = image_embeddings / image_embeddings.norm(dim=0, keepdim=True) # Normalized (B, 1024)
+                image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
                 output = image_embeddings @ text_embeddings / temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
                 
             elif opt.tl_method in ['adapter', 'adapter_reg', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
@@ -600,14 +606,14 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             # Update acc dict
             update_dict(acc_groups, labels, groups, output)
         
-            if opt.watch_batch_results:
-                if (idx+1) % opt.print_freq == 0:
-                    print(f'{print_label}: [{0}/{1}]\t'
-                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                        'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
-                        idx, len(val_loader), batch_time=batch_time,
-                        loss=losses, acc=acc))
+            # if opt.watch_batch_results:
+            #     if (idx+1) % opt.print_freq == 0:
+            #         print(f'{print_label}: [{0}/{1}]\t'
+            #             'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+            #             'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+            #             'Acc@1 {acc.val:.3f} ({acc.avg:.3f})'.format(
+            #             idx, len(val_loader), batch_time=batch_time,
+            #             loss=losses, acc=acc))
                     
     group_acc = get_results(acc_groups, get_yp_func)
 
@@ -639,12 +645,13 @@ def train_all_epochs(opt):
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
             print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, 512, 512)
+            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
         else:
             print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
             trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
             print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
             train_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+        
         if opt.train_target == "class":
             print(f"Training target : {opt.train_target} (Land bird(0) / Water bird(1))")
         elif opt.train_target == "spurious":
