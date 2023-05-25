@@ -42,6 +42,7 @@ def main(args):
         template = classic_templates.templates
         class_templates = classic_celeba_templates.classes
         spurious_templates = classic_celeba_templates.spurious_attributes
+        group_templates = classic_celeba_templates.group_attributes
     else:
         raise NotImplementedError
     
@@ -106,7 +107,6 @@ def main(args):
             
         del text_class_dict, text_spurious_dict, text_group_dict
 
-    return # 난 임베딩만 필요해~~
     # NOTE : Zero-shot Prediction은 그냥 Class에 대해서만 수행.
     zeroshot_weights = zeroshot_weights_dict["class"] 
     
