@@ -562,8 +562,9 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             text_embeddings = get_text_embedding(opt.text_embedding_dir)
         elif target=='spurious':
             text_embeddings = get_text_embedding(opt.text_spurious_embedding_dir)
-        
+        text_embeddings = text_embeddings.cuda()
         text_embeddings = text_embeddings / text_embeddings.norm(dim=0, keepdim=True)
+        
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
@@ -576,7 +577,7 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
             labels = all_labels[target] # target : one of [class, spurious, group]
             groups = all_labels['group'] # For evaluating group accuracy (and further developing group-information-aware approaches)
             
-            text_embeddings = text_embeddings.cuda()
+            
             image_embeddings = image_embeddings.float().cuda()
             labels = labels.cuda()
             bsz = labels.shape[0]
@@ -585,7 +586,7 @@ def validate_zs(opt, val_loader, classifier, criterion, get_yp_func, train_group
                 image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True) # Normalized (B, 1024)
                 output = image_embeddings @ text_embeddings / temperature # (B, 1024) X (B, 2, 1024) = # (B, 2)
                 
-            elif opt.tl_method in ['adapter', 'adapter_reg', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
+            elif opt.tl_method in ['adapter', 'adapter_reg', 'adapter_reg_seq', 'contrastive_adapter']: # Adpater, Contrastive Adapter : Embedding -> (1) (Adapted) Embedding -> (2) ZeroShot prediction as logit    (CustomCLIP.forward : (1)+(2))
                 # forward
                 if target=='class':
                     output = classifier(image_embeddings)
