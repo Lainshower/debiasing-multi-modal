@@ -640,6 +640,7 @@ def train_all_epochs(opt):
     print(f"> Start Transfer Learning using [{opt.tl_method}]")
     print('========================================================================')
     if opt.dataset == 'waterbirds':
+        
         # build data loader
         if opt.tl_method == "adapter_reg":
             from data.waterbirds_embeddings_reg import WaterbirdsEmbeddings, load_waterbirds_embeddings
@@ -659,13 +660,20 @@ def train_all_epochs(opt):
             print(f"Training target : {opt.train_target} (Land background(0) / Water background(1))")
         
     elif opt.dataset == 'celeba':
-        # build dataset example.
-        print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
-        trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-        
+
         # build data loader
         print("Load Data Loader (train, validation, test)")
-        train_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+        if opt.tl_method == "adapter_reg":
+            from data.celeba_embeddings_reg import CelebaEmbeddings, load_celeba_embeddings
+            print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
+            trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print("Load Data Loader (train, validation, test)")
+            train_loader, reg_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
+        else:
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
+            train_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
         
         # print training target
         if opt.train_target == "class":
