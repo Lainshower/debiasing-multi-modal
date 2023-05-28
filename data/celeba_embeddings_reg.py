@@ -27,7 +27,7 @@ class CelebaEmbeddings(Dataset):
         self.metadata_df = self.metadata_df[self.split_df['partition'] == self.split_dict[self.split]]
 
         self.embeddings_df = pd.read_json(self.embedding_dir) # key : image_filename
-        indices_to_convert = ['blond', 'male', 'group', 'y_pred'] # str -> index
+        indices_to_convert = ['blond', 'male', 'group', 'y_pred', 'split'] # str -> index
         self.embeddings_df.loc[indices_to_convert] = self.embeddings_df.loc[indices_to_convert].astype('int64')
         
         # Get the y values
@@ -106,7 +106,7 @@ def stratified_split_dataset(dataset, test_size=0.5):
     val_subset = torch.utils.data.Subset(dataset, val_idx)
     return reg_subset, val_subset
 
-def load_celeba_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None):
+def load_celeba_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=16, transform=None):
     """
     Default dataloader setup for CelebA
 
