@@ -1,5 +1,8 @@
-# debiasing-multi-modal
+# Feature Debiasing with Regularized Adapter in Vision-Language Foundation Model
 
+- Jinsu Park (GSAI, Postech)  
+- Sangwoon Lim (GSAI, Postech)  
+- Joonwon Jang (GSAI, Postech)  
 
 ## Requirements
 We include a `requirements.txt` file for installing dependencies with `pip install -r requirements.txt`.  
@@ -17,15 +20,15 @@ matplotlib==3.7.1
 numpy==1.23.5  
 pandas==2.0.0  
 
-## Datasets and code 
+## Download datasets and preprocessing
 
-### Download datasets
+### 1. Download datasets
 **Waterbirds**: Download the dataset from [here](https://nlp.stanford.edu/data/dro/waterbird_complete95_forest2water2.tar.gz), and move unzipped folder to `./data/waterbirds/waterbird_complete95_forest2water2`  
 
 **CelebA**: Download the dataset from [here](https://www.kaggle.com/jessicali9530/celeba-dataset), and move unzipped files to `./data/celeba/[files]`.  
 
 
-### Extract embeddings using CLIP model.
+### 2. Extract embeddings using CLIP model.
 
 ```
 # celeba 
@@ -33,37 +36,44 @@ python clip_inference.py --data_dir data --dataset celeba --embedding_dir embedd
 
 # waterbirds
 python clip_inference.py --data_dir data --dataset waterbirds --embedding_dir embeddings_unnormalized --save --split all --backbone RN50
-
 ```
 
-The extractred text/images embeddings would be saved in `data/embeddings_unnormalized/[dataset]`  
+The extractred text/images embeddings would be saved in `data/embeddings_unnormalized/[dataset]`.
 
 
 ## Train and Evaluation
 
-- Warnings: you should append the path of main folder using `sys.path.append(....)`
+- Warnings: you should append the path of main folder using `sys.path.append(....)`, if library importing errors occur.
 
-Train(single): refer to `demo/run_final_main.sh`  
-Train(multiple(mean+-std); celeba): refer to `demo/run_final_main_iteration_ca.sh`  
-Train(multiple(mean+-std); waterbirds): refer to `demo/run_final_main_iteration_wb.sh`    
+- Train(single): refer to `run_final_main.sh`  
+- Train(multiple(mean+-std); celeba): refer to `demo/run_final_main_iteration_ca.sh`  
+- Train(multiple(mean+-std); waterbirds): refer to `demo/run_final_main_iteration_wb.sh`    
 
 Note that best hyper-parameter is described in these run files. 
 
 ## Demo with corresponding results in reports.
-### Table 1
+### Table 2
+> See the training demo in [`demo/demo_train.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_train.ipynb) in the case of **celeba** dataset. 
 
-See the **Jupyter Notebook** Demo in `demo/demo_train.ipynb` in celeba. 
+<img width="1172" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/8ecc5b00-4309-4db8-a366-4f66be8fc75f">
 
-Full sweeped results can be found in `demo/results_waterbirds.out` about waterbirds dataset, and `demo/results_celeba_out` about celeba datasets (best model was selected from these results. refer to `demo/demo_final_performance_and_ablations.ipynb`).  
+
+- Full sweeped results can be found in [`demo/results_waterbirds.out`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/results_waterbirds.out) about **waterbirds** dataset
+(best model was selected from these results. refer to [`demo/demo_final_performance_and_ablations.ipynb`]((https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_final_performance_and_ablations.ipynb))).  
   
 
 
 ### Table 3
+> See the results in table of ablation study, in [`demo/demo_final_performance_and_ablations.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_final_performance_and_ablations.ipynb).
+<img width="1183" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/a174cb3a-96b0-49fd-a198-5abc19114d96">
 
-See the results in table of ablation study, in `demo/demo_final_performance_and_ablations.ipynb`.
-This include the performance of our final model(*GCP-Seq-MA*).  
+
+This also include the performance of our final model(*GCP-Seq-MA*).  
 
 
-### Figure 1, 3, 4
+### Figures
+>  See the visualization results in [`demo/demo_visualization.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_visualization.ipynb)
+<img width="1175" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/6303e1ab-7fd4-4648-bf5d-995e17f17ee3">
+<img width="1186" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/0a58e3e1-a438-4f51-87cd-1be073416374">
 
-See the visualization results in `demo/demo_visualization.ipynb`
+
