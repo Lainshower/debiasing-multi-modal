@@ -14,7 +14,7 @@ from tqdm import tqdm
 from data.celeba import CelebA
 from data.waterbirds import Waterbirds
 import classic_templates
-import classic_celeba_templates
+import run.sweeping.ca.classic_celeba_templates as classic_celeba_templates
 import classic_waterbirds_templates
 
 from collections import defaultdict

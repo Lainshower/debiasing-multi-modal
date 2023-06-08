@@ -87,7 +87,7 @@ class WaterbirdsEmbeddings(Dataset):
         return ebd, {"class": y,"group": y_group,"spurious": y_spurious, "ebd_y_pred": ebd_y_pred}, img_filename
     
 
-def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=8, transform=None):
+def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=512, num_workers=16, transform=None):
     train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 

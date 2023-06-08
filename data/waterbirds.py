@@ -98,7 +98,7 @@ def get_transform_cub(train):
     return transform
 
 
-def load_waterbirds(root_dir, bs_train=128, bs_val=128, num_workers=8):
+def load_waterbirds(root_dir, bs_train=128, bs_val=128, num_workers=16):
     """
     Default dataloader setup for Waterbirds
 

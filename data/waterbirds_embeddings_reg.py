@@ -108,7 +108,7 @@ def stratified_split_dataset(dataset, test_size=0.5):
     val_subset = torch.utils.data.Subset(dataset, val_idx)
     return reg_subset, val_subset
 
-def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=256, num_workers=8, transform=None):
+def load_waterbirds_embeddings(data_dir, embedding_dir, bs_train=512, bs_val=256, num_workers=16, transform=None):
     train_set = WaterbirdsEmbeddings(data_dir, 'train', embedding_dir, transform)
     train_loader = DataLoader(train_set, batch_size=bs_train, shuffle=True, num_workers=num_workers)
 

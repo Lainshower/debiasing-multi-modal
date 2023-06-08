@@ -77,7 +77,7 @@ def get_transform_celeba():
     return transform
 
 
-def load_waterbirds(root_dir, bs_train=2, bs_val=2, num_workers=8):
+def load_waterbirds(root_dir, bs_train=2, bs_val=2, num_workers=16):
     """
     Default dataloader setup for CelebA
 
