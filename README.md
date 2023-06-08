@@ -1,8 +1,15 @@
 # Feature Debiasing with Regularized Adapter in Vision-Language Foundation Model
 
-- Jinsu Park (GSAI, Postech)  
-- Sangwoon Lim (GSAI, Postech)  
-- Joonwon Jang (GSAI, Postech)  
+
+> [2023-1] Deep Learning (AIGS538) Team project in POSTECH.
+
+<img width="1238" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/7b52f15d-422d-4c72-898e-4cb83aa42731">
+
+
+By: 
+- Jinsu Park (GSAI, POSTECH)  
+- Sangwoon Lim (GSAI, POSTECH)  
+- Joonwon Jang (GSAI, POSTECH)  
 
 ## Requirements
 We include a `requirements.txt` file for installing dependencies with `pip install -r requirements.txt`.  
@@ -50,6 +57,9 @@ The extractred text/images embeddings would be saved in `data/embeddings_unnorma
 - Train(multiple(mean+-std); waterbirds): refer to [`run_multiple/run_final_main_iteration_wb.sh`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/run_multiple/run_final_main_iteration_wb.sh)  
 
 Note that best hyper-parameter is described in these run files. 
+
+
+
 
 # (!) Demo with corresponding results in final reports.
 ## Table 2
