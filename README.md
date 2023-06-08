@@ -59,7 +59,7 @@ Note that best hyper-parameter is described in these run files.
 
 
 - Full sweeped results can be found in [`demo/results_waterbirds.out`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/results_waterbirds.out) about **waterbirds** dataset
-(best model was selected from these results. refer to [`demo/demo_final_performance_and_ablations.ipynb`]((https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_final_performance_and_ablations.ipynb))).  
+(best model was selected from these results. refer to [`demo/demo_final_performance_and_ablations.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_final_performance_and_ablations.ipynb)).  
   
 
 
@@ -74,6 +74,4 @@ This also include the performance of our final model(*GCP-Seq-MA*).
 ### Figures
 >  See the visualization results in [`demo/demo_visualization.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_visualization.ipynb)
 <img width="1175" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/6303e1ab-7fd4-4648-bf5d-995e17f17ee3">
-<img width="1186" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/0a58e3e1-a438-4f51-87cd-1be073416374">
-
 
