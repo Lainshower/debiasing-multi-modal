@@ -21,9 +21,9 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 
-from util import AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate, accuracy
-from util import set_optimizer
+from demo.util import AverageMeter
+from demo.util import adjust_learning_rate, warmup_learning_rate, accuracy
+from demo.util import set_optimizer
 
 from data.waterbirds_embeddings import WaterbirdsEmbeddings, load_waterbirds_embeddings
 from data.celeba_embeddings import CelebaEmbeddings, load_celeba_embeddings

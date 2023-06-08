@@ -11,9 +11,9 @@ import torch
 import torch.backends.cudnn as cudnn
 
 from main_ce import set_loader
-from util import AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate, accuracy
-from util import set_optimizer
+from demo.util import AverageMeter
+from demo.util import adjust_learning_rate, warmup_learning_rate, accuracy
+from demo.util import set_optimizer
 from networks.resnet_big import SupConResNet, LinearClassifier
 
 try:

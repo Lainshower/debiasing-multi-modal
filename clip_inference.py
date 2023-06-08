@@ -36,11 +36,13 @@ def main(args):
         template = classic_templates.templates
         class_templates = classic_waterbirds_templates.classes
         spurious_templates = classic_waterbirds_templates.spurious_attributes
+        group_templates = classic_waterbirds_templates.group_attributes
         
     elif args.dataset == 'celeba':
         template = classic_templates.templates
         class_templates = classic_celeba_templates.classes
         spurious_templates = classic_celeba_templates.spurious_attributes
+        group_templates = classic_celeba_templates.group_attributes
     else:
         raise NotImplementedError
     
@@ -48,25 +50,28 @@ def main(args):
     if args.save:
         text_class_dict, image_dict = {}, {}
         text_spurious_dict = {}
+        text_group_dict = {}
     
     with torch.no_grad():
         zeroshot_weights_dict = {}
-        for idx, templates in enumerate([class_templates, spurious_templates]):
+        for idx, templates in enumerate([class_templates, spurious_templates, group_templates]):
             zeroshot_weights = []
             for class_keywords in templates:
                 texts = [template[0].format(class_keywords)]
                 texts = clip.tokenize(texts).cuda()
 
                 class_embeddings = model.encode_text(texts)
-                class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
+                # class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
                 class_embedding = class_embeddings.mean(dim=0)
-                class_embedding /= class_embedding.norm()
+                # class_embedding /= class_embedding.norm()
                 
                 if args.save:
                     if idx==0:
                         text_class_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
                     elif idx==1:
                         text_spurious_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
+                    elif idx==2:
+                        text_group_dict[template[0].format(class_keywords)] = class_embedding.clone().detach().cpu().numpy().tolist()
                         
                 zeroshot_weights.append(class_embedding)
             zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
@@ -75,7 +80,9 @@ def main(args):
                 zeroshot_weights_dict["class"] = zeroshot_weights
             elif idx==1:
                 zeroshot_weights_dict["spurious"] = zeroshot_weights
-            
+            elif idx==2:
+                zeroshot_weights_dict["group"] = zeroshot_weights
+                
     if args.save:
         # save the dictionary to a json file
         emb_dir = os.path.join(args.data_dir, args.embedding_dir, args.dataset)
@@ -85,6 +92,7 @@ def main(args):
             
         file_class_path = os.path.join(emb_dir, 'clip_class.json')
         file_spurious_path = os.path.join(emb_dir, 'clip_spurious.json')
+        file_group_path = os.path.join(emb_dir, 'clip_group.json')
     
         with open(file_class_path, 'w') as f:
             json.dump(text_class_dict, f)
@@ -93,10 +101,12 @@ def main(args):
         with open(file_spurious_path, 'w') as f:
             json.dump(text_spurious_dict, f)
             print("save text emb (spurious)")
+        with open(file_group_path, 'w') as f:
+            json.dump(text_group_dict, f)
+            print("save text emb (group)")
             
-        del text_class_dict, text_spurious_dict
+        del text_class_dict, text_spurious_dict, text_group_dict
 
-    
     # NOTE : Zero-shot Prediction은 그냥 Class에 대해서만 수행.
     zeroshot_weights = zeroshot_weights_dict["class"] 
     

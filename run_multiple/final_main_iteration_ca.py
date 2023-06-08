@@ -20,10 +20,10 @@ from copy import deepcopy
 import torch
 import torch.backends.cudnn as cudnn
 
-from util import AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate, accuracy, adjust_learning_rate_reg, warmup_learning_rate_reg
-from util import set_optimizer, set_optimizer_reg, get_lr
-from util import set_seed
+from demo.util import AverageMeter
+from demo.util import adjust_learning_rate, warmup_learning_rate, accuracy, adjust_learning_rate_reg, warmup_learning_rate_reg
+from demo.util import set_optimizer, set_optimizer_reg, get_lr
+from demo.util import set_seed
 from visualizer_supcon import skim_dataloader_by_group # 임시, Balanced Loader 확인용.
 
 from torch.utils.data import DataLoader, Subset
@@ -233,7 +233,6 @@ def parse_option():
                         ,help='transfer learning method')
     parser.add_argument('--balance_val', action='store_true', help="Balancing Val-reg loader.") #
     parser.add_argument('--resample_ce', action='store_true', help="Re-sampling Train loader.") #
-
     parser.add_argument('--use_cls_prompt_in_reg', action='store_true', help="True: use class-text-prompt in regularization.") # [10, 50] in Waterbird
     parser.add_argument('--add_adapter', action='store_true', default=False, help="Additional Adapter in regularization.") # [10, 50] in Waterbird
     parser.add_argument('--init_near_identity', action='store_true', help="Initialize additional adapter, making classifier' output near-identity before/after initialization ") # [10, 50] in Waterbird
@@ -247,6 +246,13 @@ def parse_option():
     
     parser.add_argument('--num_iter', type=int, default=3, help="Averaging [num_iter] run, at different seed")
     parser.add_argument('--random_seeds', type=str, default='42,32,22', help="random seed for iterative training." )
+    parser.add_argument('--lr_multiple', type=float, default=1.0, help="lr multiple." )
+
+
+    parser.add_argument('--lr_list', type=str, default='1e-1', help='Learning rate list')
+    parser.add_argument('--bs_list', type=str, default='128', help='Batch size list')
+    parser.add_argument('--bsr_list', type=str, default='128', help='Batch size (reg) list')
+
 
     # parser.add_argument('--lr_linear_probing', type=float, default=1e-3, chocies=[1e-3, 1e-2, 1e-1, 1, 3, 10], help='learning rate for linear probing') # Tuning needed. 
       # -> Zero-shot으로 대체하는 게 맞을듯.
@@ -278,7 +284,11 @@ def parse_option():
     if opt.warm_reg:
         opt.warmup_from_reg = opt.learning_rate_reg / 1e2
         
-        opt.warm_epochs_reg = 10
+        if opt.dataset =='celeba':
+            opt.warm_epochs_reg = 2
+        else:
+            opt.warm_epochs_reg = 10
+            
         if opt.cosine:
             eta_min = opt.learning_rate_reg * (opt.lr_decay_rate ** 3)
             opt.warmup_to_reg = eta_min + (opt.learning_rate_reg - eta_min) * (
@@ -809,86 +819,46 @@ def train_all_epochs(opt):
     best_acc = 0
     best_epoch = 0
     best_model = None
-    # opt = parse_option()
+    # opt = parse_option()    
     
+    if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
+        print(f"====== TL:[{opt.tl_method}] LR:[{opt.learning_rate}] BS:[{opt.batch_size}] BSr:[{opt.batch_size_reg}] ======")
+        reg_loader = deepcopy(opt.reg_loader)
+    else:
+        print(f"====== TL:[{opt.tl_method}] LR:[{opt.learning_rate}] BS:[{opt.batch_size}]======")
     
-    print(f"> Start Transfer Learning using [{opt.tl_method}]")
-    print('========================================================================')
-    if opt.dataset == 'waterbirds':
-        # build data loader
-        if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
-            from data.waterbirds_embeddings_reg import WaterbirdsEmbeddings, load_waterbirds_embeddings
-            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
-            trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-            print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
-        else:
-            from data.waterbirds_embeddings import WaterbirdsEmbeddings, load_waterbirds_embeddings
-            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
-            trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
-            train_loader, val_loader, test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
-        
-        if opt.train_target == "class":
-            print(f"Training target : {opt.train_target} (Land bird(0) / Water bird(1))")
-        elif opt.train_target == "spurious":
-            print(f"Training target : {opt.train_target} (Land background(0) / Water background(1))")
-        
-    elif opt.dataset == 'celeba':
-        # build dataset example.
-        from data.celeba_embeddings import CelebaEmbeddings, load_celeba_embeddings # 버근가.. 왜 인식을 몬하지
-        print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
-        
-        trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-        
-        # build data loader
-        print("Load Data Loader (train, validation, test)")
-        
-        train_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
-        if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
-            from data.celeba_embeddings_reg import CelebaEmbeddings, load_celeba_embeddings
-            print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
-            trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-            print("Load Data Loader (train, validation, test)")
-            train_loader, reg_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
-        else:
-            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
-            trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
-            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
-            train_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
-        
-        # print training target
-        if opt.train_target == "class":
-            print(f"Training target : {opt.train_target} (non-blond hair(0) / blond hair(1))")
-        elif opt.train_target == "spurious":
-            print(f"Training target : {opt.train_target} (female(0) / male(1))")
-
+    print("> Simply copy the data loader ... ")
+    # train_all_epochs 함수에서 다시 가져온다.
+    # trainset = opt.trainset
+    # train_loader = opt.train_loader
+    # val_loader = opt.val_loader
+    # test_loader = opt.test_loader
+    
     # for Balancing Validation Loader.
     if opt.balance_val and (opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter']):
         print("Using [Balanced] Validation loader for regularized training")
-        origin_reg_loader = deepcopy(reg_loader) # -> From this loader, sampling balanced validation dataset for every epoch.
+        origin_reg_loader = opt.reg_loader # -> From this loader, sampling balanced validation dataset for every epoch.
         
-    # for Resampling Train Loader.
     if opt.resample_ce:
         print("Using [Resampled] Train loader for erm/feature laerning")
         opt.correct_class_bias = True
         opt.reweighting_by_class = False
         from visualizer_supcon import compute_slice_indices, prepare_contrastive_points, GetNegativesByClass, GetResampledWeightsCE
         from torch.utils.data.sampler import WeightedRandomSampler
-        sliced_data_indices, sliced_data_correct = compute_slice_indices(opt, trainset)
-        contrastive_points = prepare_contrastive_points(trainset,sliced_data_indices,sliced_data_correct)
+        sliced_data_indices, sliced_data_correct = compute_slice_indices(opt, opt.trainset)
+        contrastive_points = prepare_contrastive_points(opt.trainset,sliced_data_indices,sliced_data_correct)
         _, _, positives_by_class, _ = contrastive_points
     
         # skim_dataloader_by_group(train_loader)
-        negatives_by_class = GetNegativesByClass(opt, trainset, positives_by_class)
-        weights_resampled_ce = GetResampledWeightsCE(trainset, positives_by_class, negatives_by_class, opt)
-        ce_sampler = WeightedRandomSampler(weights = weights_resampled_ce, num_samples = len(trainset), replacement=True) # num_samples = len(trainset) -> oversampling 한 만큼 major group에서 unseen-sample 나옴
-        resampled_train_loader = DataLoader(trainset, sampler=ce_sampler, batch_size=opt.batch_size, num_workers=8)
+        negatives_by_class = GetNegativesByClass(opt, opt.trainset, positives_by_class)
+        weights_resampled_ce = GetResampledWeightsCE(opt.trainset, positives_by_class, negatives_by_class, opt)
+        ce_sampler = WeightedRandomSampler(weights = weights_resampled_ce, num_samples = len(opt.trainset), replacement=True) # num_samples = len(trainset) -> oversampling 한 만큼 major group에서 unseen-sample 나옴
+        resampled_train_loader = DataLoader(opt.trainset, sampler=ce_sampler, batch_size=opt.batch_size, num_workers=16)
         # skim_dataloader_by_group(resampled_train_loader)
     
     # group information
-    get_yp_func = partial(get_y_p, n_places=trainset.n_places)
-    train_group_ratio = trainset.group_ratio
+    get_yp_func = partial(get_y_p, n_places=opt.trainset.n_places)
+    train_group_ratio = opt.trainset.group_ratio
     
     # build model and criterion
 
@@ -926,15 +896,15 @@ def train_all_epochs(opt):
         if opt.tl_method == "adapter_reg":
             # Alternative Training
             if opt.use_cls_prompt_in_reg:
-                loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
+                loss, acc, group_acc = train_reg_one_epoch(opt, opt.train_loader, reg_loader, classifier, criterion, 
                                                             optimizer, epoch, get_yp_func, target=opt.train_target, group_prompt = False, print_label=f'Train (Alternative Learning)(Class prompt)')
             else:
-                loss, acc, group_acc = train_reg_one_epoch(opt, train_loader, reg_loader, classifier, criterion, 
+                loss, acc, group_acc = train_reg_one_epoch(opt, opt.train_loader, reg_loader, classifier, criterion, 
                                                             optimizer, epoch, get_yp_func, target=opt.train_target, group_prompt = True, print_label=f'Train (Alternative Learning)(Group prompt)')
         elif opt.tl_method in  ["adapter_reg_seq", "adapter_reg_seq_alter"]:
             if epoch <= opt.epochs_feature_learning:
             # Sequetional Training
-                loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion, 
+                loss, acc, group_acc = train_one_epoch(opt, opt.train_loader, classifier, criterion, 
                                                         optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train-1 (Feature Learning)')
                 
             
@@ -986,17 +956,17 @@ def train_all_epochs(opt):
                                                                     optimizer_reg, epoch, get_yp_func, target=opt.train_target, print_label=f'Train-2 (Balanced Learning)(new adapter)(Class prompt)', use_group=False)
                             
         else:
-            loss, acc, group_acc = train_one_epoch(opt, train_loader, classifier, criterion,
+            loss, acc, group_acc = train_one_epoch(opt, opt.train_loader, classifier, criterion,
                           optimizer, epoch, get_yp_func, target=opt.train_target, print_label=f'Train({opt.train_target})')
         train_losses.append(loss); train_accs.append(acc); train_group_accs.append(group_acc)
         
         # eval for one epoch
         
         if opt.add_adapter and epoch > opt.epochs_feature_learning:
-            val_loss, val_acc, val_group_acc = validate(opt, val_loader, multiple_adapter, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})(new adapter)')
+            val_loss, val_acc, val_group_acc = validate(opt, opt.val_loader, multiple_adapter, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})(new adapter)')
             val_losses.append(val_loss); val_accs.append(val_acc); val_group_accs.append(val_group_acc)
         else:
-            val_loss, val_acc, val_group_acc = validate(opt, val_loader, classifier, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})')
+            val_loss, val_acc, val_group_acc = validate(opt, opt.val_loader, classifier, criterion, get_yp_func, train_group_ratio, target=opt.train_target, print_label=f'Val({opt.train_target})')
             val_losses.append(val_loss); val_accs.append(val_acc); val_group_accs.append(val_group_acc)
             
         # update best epoch by worst_group accuracy (default)
@@ -1012,10 +982,10 @@ def train_all_epochs(opt):
         
         # test for one epoch
         if opt.add_adapter and epoch > opt.epochs_feature_learning:
-            test_loss, test_acc, test_group_acc = validate(opt, test_loader, multiple_adapter, criterion, get_yp_func, train_group_ratio, target='class', print_label=f'Test({opt.train_target})(new adapter)')
+            test_loss, test_acc, test_group_acc = validate(opt, opt.test_loader, multiple_adapter, criterion, get_yp_func, train_group_ratio, target='class', print_label=f'Test({opt.train_target})(new adapter)')
             test_losses.append(test_loss); test_accs.append(test_acc); test_group_accs.append(test_group_acc)
         else:
-            test_loss, test_acc, test_group_acc = validate(opt, test_loader, classifier, criterion, get_yp_func, train_group_ratio, target='class', print_label=f'Test({opt.train_target})')
+            test_loss, test_acc, test_group_acc = validate(opt, opt.test_loader, classifier, criterion, get_yp_func, train_group_ratio, target='class', print_label=f'Test({opt.train_target})')
             test_losses.append(test_loss); test_accs.append(test_acc); test_group_accs.append(test_group_acc)
 
     print('========================================================================')
@@ -1036,7 +1006,7 @@ def train_all_epochs(opt):
     
     
     # Zero-shot [class] prediction
-    zs_loss, zs_acc, zs_group_acc = validate_zs(opt, test_loader, best_model, criterion, get_yp_func, train_group_ratio, target="class", print_label='zero-shot prediction (test) (class)')    
+    zs_loss, zs_acc, zs_group_acc = validate_zs(opt, opt.test_loader, best_model, criterion, get_yp_func, train_group_ratio, target="class", print_label='zero-shot prediction (test) (class)')    
     
     if opt.tl_method in ["linear_probing"]:
         print(f" ㄴ Note that it should be same to [CLIP Zero-shot Baselines, of which worst acc is about 39%], in {opt.tl_method}")
@@ -1044,7 +1014,7 @@ def train_all_epochs(opt):
         print(f" ㄴ Note that it should be same to [best test accuracy on [{opt.train_target}]], above, in {opt.tl_method}")
     
     # Zero-shot [spurious] prediction 
-    zs_loss_spurious, zs_acc_spurious, zs_group_acc_spurious = validate_zs(opt, test_loader, best_model, criterion, get_yp_func, train_group_ratio, target="spurious", print_label='zero-shot prediction (test) (spurious)')    
+    zs_loss_spurious, zs_acc_spurious, zs_group_acc_spurious = validate_zs(opt, opt.test_loader, best_model, criterion, get_yp_func, train_group_ratio, target="spurious", print_label='zero-shot prediction (test) (spurious)')    
     print(f" ㄴ Note that it is related to [richness of non-target (spurious) information] (-> 'mean_acc' is important)")
     
     print('========================================================================')
@@ -1121,82 +1091,166 @@ def train_all_epochs(opt):
     
     print('========================================================================')
     print("> end")
+    # del trainset; del train_loader; del val_loader; del test_loader
+    # if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
+    #     del reg_loader
     
     return (best_train_group_acc, best_val_group_acc, best_test_group_acc), (zs_group_acc, zs_group_acc_spurious)
 
 if __name__ == '__main__' :
     opt = parse_option()
-    for iter in range(1, opt.num_iter+1):
-        print(f"f=============Iteration : {iter}/{opt.num_iter}=============")
-        
-        set_seed(opt.random_seeds[iter-1])
-
-        (tr_group_acc, val_group_acc, test_group_acc), (zs_target, zs_spurious)= train_all_epochs(opt)
-        
-        if iter==1:
-            tr_df = pd.DataFrame(tr_group_acc, index=[iter])
-            val_df = pd.DataFrame(val_group_acc, index=[iter])
-            test_df = pd.DataFrame(test_group_acc, index=[iter])
-            zs_target_df = pd.DataFrame(zs_target, index=[iter])
-            zs_spurious_df = pd.DataFrame(zs_spurious, index=[iter])
+    
+    # Data Loader: Model 당 한 번만 수행하자. (CPU 아파 죽는 것 같음. num_workers 16 / 
+    
+    print(f"> Start Transfer Learning using [{opt.tl_method}]")
+    print('========================================================================')
+    if opt.dataset == 'waterbirds':
+        # build data loader                
+        if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
+            from data.waterbirds_embeddings_reg import WaterbirdsEmbeddings, load_waterbirds_embeddings
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            opt.trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print("Load Data Loader (train, validation, test)")
+            opt.train_loader, opt.reg_loader, opt.val_loader, opt.test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
         else:
-            tr_df = pd.concat([tr_df, pd.DataFrame(tr_group_acc, index=[iter])])
-            val_df = pd.concat([val_df, pd.DataFrame(val_group_acc, index=[iter])])
-            test_df = pd.concat([test_df, pd.DataFrame(test_group_acc, index=[iter])])
-            zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target, index=[iter])])
-            zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious, index=[iter])])
+            from data.waterbirds_embeddings import WaterbirdsEmbeddings, load_waterbirds_embeddings
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            trainset = WaterbirdsEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
+            opt.train_loader, opt.val_loader, opt.test_loader = load_waterbirds_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
         
-    tr_df = pd.concat([tr_df, pd.DataFrame(tr_df.mean().to_dict(), index=['tr_mean'])])
-    tr_df = pd.concat([tr_df, pd.DataFrame(tr_df.std().to_dict(), index=['tr_std'])])
-    val_df = pd.concat([val_df, pd.DataFrame(val_df.mean().to_dict(), index=['val_mean'])])
-    val_df = pd.concat([val_df, pd.DataFrame(val_df.std().to_dict(), index=['val_std'])])
-    test_df = pd.concat([test_df, pd.DataFrame(test_df.mean().to_dict(), index=['test_mean'])])
-    test_df = pd.concat([test_df, pd.DataFrame(test_df.std().to_dict(), index=['test_std'])])
-    zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target_df.mean().to_dict(), index=['zs_tg_mean'])])
-    zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target_df.std().to_dict(), index=['zs_tg_std'])])
-    zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious_df.mean().to_dict(), index=['zs_spu_mean'])])
-    zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious_df.std().to_dict(), index=['zs_spu_std'])])
-    
-    
-    final_df = pd.concat([test_df, zs_spurious_df, tr_df, val_df, zs_target_df])
-    result_root = "results_iterative"
-    if not os.path.exists(result_root):
-        os.mkdir(result_root)
-    
-    final_result_file_path = f"ds_{opt.dataset}_tl_{opt.tl_method}_bs_{opt.batch_size}_lr_{opt.learning_rate}"
-    
-    if "reg" in opt.tl_method:
-        final_result_file_path += f"_lrr{opt.learning_rate_reg}_bsr{opt.batch_size_reg}"
-    
-        if opt.balance_val:
-            final_result_file_path += "_balval"
+        if opt.train_target == "class":
+            print(f"Training target : {opt.train_target} (Land bird(0) / Water bird(1))")
+        elif opt.train_target == "spurious":
+            print(f"Training target : {opt.train_target} (Land background(0) / Water background(1))")
         
-        if opt.tl_method != "adapter_reg_seq_alter":      
-            if opt.use_cls_prompt_in_reg:
-                final_result_file_path += f"_CP"
-            else:
-                final_result_file_path += f"_GP"
-            
-        if opt.add_adapter:
-            final_result_file_path += f"_MA"
-            if opt.init_near_identity:
-                final_result_file_path += "+ni"
-            else:
-                final_result_file_path += "+rn"
+    elif opt.dataset == 'celeba':
+        # build dataset example.
+        from data.celeba_embeddings import CelebaEmbeddings, load_celeba_embeddings # 버근가.. 왜 인식을 몬하지
+        print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
         
-        if opt.continue_from_best and ('seq' in opt.tl_method):
-            final_result_file_path+="_cont"
-    
-    if opt.resample_ce:
-        final_result_file_path+="_rs"
+        opt.trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
         
-    final_df = final_df.round(4)
-    print("Final Results: ", final_df)
-    print("Save to: ", os.path.join(result_root, final_result_file_path)+'.csv')
-    final_df.to_csv(os.path.join(result_root, final_result_file_path)+'.csv')
-    
-    # save results, as json.
-    # with , "w") as f:
-    #     json.dump(final_results, f, indent=4)
+        # build data loader
+        print("Load Data Loader (train, validation, test)")
         
+        train_loader, val_loader, test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+        if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
+            from data.celeba_embeddings_reg import CelebaEmbeddings, load_celeba_embeddings
+            print(f"Load embedding of CelebA: {opt.image_embedding_dir}")
+            opt.trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print("Load Data Loader (train, validation, test)")
+            opt.train_loader, opt.reg_loader, opt.val_loader, opt.test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size_reg)
+        else:
+            print(f"Load image embedding of Waterbirds: {opt.image_embedding_dir}")
+            opt.trainset = CelebaEmbeddings(opt.data_dir, 'train', opt.image_embedding_dir, None)
+            print(f"ㄴ Corresponding text embedding of Waterbirds: {opt.text_embedding_dir}")
+            opt.train_loader, opt.val_loader, opt.test_loader = load_celeba_embeddings(opt.data_dir, opt.image_embedding_dir, opt.batch_size, opt.batch_size)
+        
+        # print training target
+        if opt.train_target == "class":
+            print(f"Training target : {opt.train_target} (non-blond hair(0) / blond hair(1))")
+        elif opt.train_target == "spurious":
+            print(f"Training target : {opt.train_target} (female(0) / male(1))")
+
+    # # train_all_epochs 함수에서 다시 가져온다.
+    # opt.trainset = trainset
+    # opt.train_loader = train_loader
+    # opt.val_loader = val_loader
+    # opt.test_loader = test_loader
     
+    # if opt.tl_method in ["adapter_reg", "adapter_reg_seq", 'adapter_reg_seq_alter'] :
+    #     opt.reg_loader = reg_loader
+    
+    
+    # set the path according to the environment
+    lr_list = opt.lr_list.split(',')
+    lr_list = [float(lr) for lr in lr_list]
+    bs_list = opt.bs_list.split(',')
+    bs_list = [int(bs) for bs in bs_list]
+    
+    # for adapter_reg, adapter_reg_seq, adapter_reg_seq_ma.
+    bsr_list = opt.bsr_list.split(',')
+    bsr_list = [int(bsr) for bsr in bsr_list]
+    
+    if opt.tl_method =="adapter":
+        bsr_list = [128] # 혹시 argument 잘못 넣었을 때를 대비.
+        
+    for lr in lr_list:
+        for bs in bs_list:
+            for bsr in bsr_list:
+                opt.learning_rate = lr
+                opt.learning_rate_reg = lr * opt.lr_multiple
+                opt.batch_size = bs
+                opt.batch_size_reg = bsr
+    
+                for iter in range(1, opt.num_iter+1):     
+                    print(f"f=============Iteration : {iter}/{opt.num_iter}=============")        
+                    
+                    set_seed(opt.random_seeds[iter-1])
+                    
+                    (tr_group_acc, val_group_acc, test_group_acc), (zs_target, zs_spurious)= train_all_epochs(opt)
+                    
+                    if iter==1:
+                        tr_df = pd.DataFrame(tr_group_acc, index=[iter])
+                        val_df = pd.DataFrame(val_group_acc, index=[iter])
+                        test_df = pd.DataFrame(test_group_acc, index=[iter])
+                        zs_target_df = pd.DataFrame(zs_target, index=[iter])
+                        zs_spurious_df = pd.DataFrame(zs_spurious, index=[iter])
+                    else:
+                        tr_df = pd.concat([tr_df, pd.DataFrame(tr_group_acc, index=[iter])])
+                        val_df = pd.concat([val_df, pd.DataFrame(val_group_acc, index=[iter])])
+                        test_df = pd.concat([test_df, pd.DataFrame(test_group_acc, index=[iter])])
+                        zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target, index=[iter])])
+                        zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious, index=[iter])])
+                    
+                tr_df = pd.concat([tr_df, pd.DataFrame(tr_df.mean().to_dict(), index=['tr_mean'])])
+                tr_df = pd.concat([tr_df, pd.DataFrame(tr_df.std().to_dict(), index=['tr_std'])])
+                val_df = pd.concat([val_df, pd.DataFrame(val_df.mean().to_dict(), index=['val_mean'])])
+                val_df = pd.concat([val_df, pd.DataFrame(val_df.std().to_dict(), index=['val_std'])])
+                test_df = pd.concat([test_df, pd.DataFrame(test_df.mean().to_dict(), index=['test_mean'])])
+                test_df = pd.concat([test_df, pd.DataFrame(test_df.std().to_dict(), index=['test_std'])])
+                zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target_df.mean().to_dict(), index=['zs_tg_mean'])])
+                zs_target_df = pd.concat([zs_target_df, pd.DataFrame(zs_target_df.std().to_dict(), index=['zs_tg_std'])])
+                zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious_df.mean().to_dict(), index=['zs_spu_mean'])])
+                zs_spurious_df = pd.concat([zs_spurious_df, pd.DataFrame(zs_spurious_df.std().to_dict(), index=['zs_spu_std'])])
+                
+                
+                final_df = pd.concat([test_df, zs_spurious_df, tr_df, val_df, zs_target_df])
+                result_root = "results_iterative"
+                if not os.path.exists(result_root):
+                    os.mkdir(result_root)
+                
+                final_result_file_path = f"ds_{opt.dataset}_tl_{opt.tl_method}_bs_{opt.batch_size}_lr_{opt.learning_rate}"
+                
+                if "reg" in opt.tl_method:
+                    final_result_file_path += f"_lrr{opt.learning_rate_reg}_bsr{opt.batch_size_reg}"
+                
+                    if opt.balance_val:
+                        final_result_file_path += "_balval"
+                    
+                    if opt.tl_method != "adapter_reg_seq_alter":      
+                        if opt.use_cls_prompt_in_reg:
+                            final_result_file_path += f"_CP"
+                        else:
+                            final_result_file_path += f"_GP"
+                        
+                    if opt.add_adapter:
+                        final_result_file_path += f"_MA"
+                        if opt.init_near_identity:
+                            final_result_file_path += "+ni"
+                        else:
+                            final_result_file_path += "+rn"
+                    
+                    if opt.continue_from_best and ('seq' in opt.tl_method):
+                        final_result_file_name+="_cont"
+                
+                
+                if opt.resample_ce:
+                    final_result_file_path+="_rs"
+                
+                final_df = final_df.round(4)
+                print("Final Results: ", final_df)
+                print("Save to: ", os.path.join(result_root, final_result_file_path)+'.csv')
+                final_df.to_csv(os.path.join(result_root, final_result_file_path)+'.csv')
+                
