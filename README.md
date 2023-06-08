@@ -51,8 +51,8 @@ The extractred text/images embeddings would be saved in `data/embeddings_unnorma
 
 Note that best hyper-parameter is described in these run files. 
 
-## Demo with corresponding results in reports.
-### Table 2
+# (!) Demo with corresponding results in final reports.
+## Table 2
 > See the training demo in [`demo/demo_train.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_train.ipynb) in the case of **celeba** dataset. 
 
 <img width="1172" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/8ecc5b00-4309-4db8-a366-4f66be8fc75f">
@@ -63,7 +63,7 @@ Note that best hyper-parameter is described in these run files.
   
 
 
-### Table 3
+## Table 3
 > See the results in table of ablation study, in [`demo/demo_final_performance_and_ablations.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_final_performance_and_ablations.ipynb).
 <img width="1183" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/a174cb3a-96b0-49fd-a198-5abc19114d96">
 
@@ -71,7 +71,7 @@ Note that best hyper-parameter is described in these run files.
 This also include the performance of our final model(*GCP-Seq-MA*).  
 
 
-### Figures
+## Figures
 >  See the visualization results in [`demo/demo_visualization.ipynb`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/demo/demo_visualization.ipynb)
 <img width="1175" alt="image" src="https://github.com/Lainshower/debiasing-multi-modal/assets/71121461/6303e1ab-7fd4-4648-bf5d-995e17f17ee3">
 
