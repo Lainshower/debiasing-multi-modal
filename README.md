@@ -45,9 +45,9 @@ The extractred text/images embeddings would be saved in `data/embeddings_unnorma
 
 - Warnings: you should append the path of main folder using `sys.path.append(....)`, if library importing errors occur.
 
-- Train(single): refer to `run_final_main.sh`  
-- Train(multiple(mean+-std); celeba): refer to `demo/run_final_main_iteration_ca.sh`  
-- Train(multiple(mean+-std); waterbirds): refer to `demo/run_final_main_iteration_wb.sh`    
+- Train(single): refer to [`run_final_main.sh`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/run_final_main.sh)  
+- Train(multiple(mean+-std); celeba): refer to [`run_multiple/run_final_main_iteration_ca.sh`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/run_multiple/run_final_main_iteration_ca.sh)  
+- Train(multiple(mean+-std); waterbirds): refer to [`run_multiple/run_final_main_iteration_wb.sh`](https://github.com/Lainshower/debiasing-multi-modal/blob/main/run_multiple/run_final_main_iteration_wb.sh)  
 
 Note that best hyper-parameter is described in these run files. 
 
